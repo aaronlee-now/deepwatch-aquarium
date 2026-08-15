@@ -1,0 +1,39 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #0a0c10;
+  color: #c8d0d8;
+  font-family: system-ui, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wrap {
+  text-align: center;
+  padding: 1rem;
+}
+
+#game {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  background: #0f141e;
+  border: 2px solid #2a3544;
+  cursor: pointer;
+  image-rendering: auto;
+}
+
+.hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+  color: #8a96a4;
+}
+
+.hint a {
+  color: #9ec4e0;
+}

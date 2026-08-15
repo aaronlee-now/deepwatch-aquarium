@@ -161,6 +161,157 @@ def load_image(filename, size, darker=False):
     return image
 
 
+def make_grayscale(image):
+    """Turn a picture gray so it looks like a newspaper photo."""
+    image = image.convert()
+    width, height = image.get_size()
+    gray = pygame.Surface((width, height))
+    for y in range(height):
+        for x in range(width):
+            color = image.get_at((x, y))
+            shade = (color.r + color.g + color.b) // 3
+            # a little extra contrast for print look
+            shade = max(0, min(255, int((shade - 128) * 1.15 + 128)))
+            gray.set_at((x, y), (shade, shade, shade))
+    return gray
+
+
+def add_print_grain(image, dots=400):
+    """Add soft print speckles to a photo (once at startup)."""
+    image = image.copy()
+    width, height = image.get_size()
+    for _ in range(dots):
+        x = random.randint(0, width - 1)
+        y = random.randint(0, height - 1)
+        color = image.get_at((x, y))
+        d = random.randint(-25, 15)
+        image.set_at(
+            (x, y),
+            (
+                max(0, min(255, color.r + d)),
+                max(0, min(255, color.g + d)),
+                max(0, min(255, color.b + d)),
+            ),
+        )
+    return image
+
+
+# The real FNaF newspaper is grayscale newsprint, not yellow paper,
+# and every word on it is printed in Courier.
+PAPER_GRAY = (228, 226, 220)
+NEWSPAPER_TILT = -5
+
+
+def make_paper_surface(width, height):
+    """Make gray newsprint with a little texture (FNaF's paper is grayscale)."""
+    paper = pygame.Surface((width, height))
+    paper.fill(PAPER_GRAY)
+    for _ in range(3000):
+        x = random.randint(0, width - 1)
+        y = random.randint(0, height - 1)
+        d = random.randint(-16, 10)
+        c = paper.get_at((x, y))
+        shade = max(0, min(255, c.r + d))
+        paper.set_at((x, y), (shade, shade, shade))
+    return paper
+
+
+def make_fnaf_newspaper_page(headline_font, body_font):
+    """
+    Build the Help Wanted page once, the way FNaF 1 does it:
+    grayscale newsprint, blurred Courier filler columns, and one
+    sharp boxed job ad. Drawn bigger than the window so the page can
+    be tilted and zoomed without showing any corners.
+    """
+    width, height = 1400, 900
+    page = make_paper_surface(width, height)
+
+    # Courier is the font FNaF uses for the clippings
+    filler_font = pygame.font.SysFont("courier,couriernew", 14)
+    filler_lines = wrap_filler_lines(filler_font, NEWSPAPER_FILLER * 6, 195)
+
+    # narrow columns with thin rules between them, like a classifieds page
+    col_width = 205
+    col_gap = 28
+    cols = list(range(30, width - col_width, col_width + col_gap))
+    for col_i, col in enumerate(cols):
+        y = 20
+        line_index = col_i * 7
+        while y < height - 10:
+            line = filler_lines[line_index % len(filler_lines)]
+            text = filler_font.render(line, True, (108, 106, 102))
+            page.blit(text, (col, y))
+            y += 13
+            line_index += 1
+        if col_i < len(cols) - 1:
+            rule_x = col + col_width + col_gap // 2
+            pygame.draw.line(page, (168, 166, 161), (rule_x, 20), (rule_x, height - 20), 1)
+
+    # smudge the filler so it reads as unreadable background text
+    small = pygame.transform.smoothscale(page, (width // 3, height // 3))
+    page = pygame.transform.smoothscale(small, (width, height))
+
+    # the boxed HELP WANTED ad sits sharp on top of the blur
+    ad_w, ad_h = 500, 450
+    ad = pygame.Rect((width - ad_w) // 2, (height - ad_h) // 2, ad_w, ad_h)
+    pygame.draw.rect(page, (242, 240, 235), ad)
+    pygame.draw.rect(page, (25, 25, 25), ad, 7)
+
+    title = headline_font.render("HELP WANTED", True, (15, 15, 15))
+    page.blit(title, (ad.centerx - title.get_width() // 2, ad.y + 30))
+
+    place = body_font.render("Deepwatch Aquarium", True, (15, 15, 15))
+    page.blit(place, (ad.centerx - place.get_width() // 2, ad.y + 95))
+
+    # same beats as the Freddy Fazbear's Pizza ad
+    ad_lines = [
+        "Family aquarium looking for security",
+        "guard to work the nightshift.",
+        "12 am to 6am.",
+        "",
+        "Monitor cameras, ensure safety of",
+        "equipment and sea exhibits.",
+        "",
+        "Not responsible for soggy shoes",
+        "or runaway crabs.",
+        "",
+        "$120 a week.",
+        "To apply, call:",
+        "1-888-DEEP-FISH",
+    ]
+    y = ad.y + 150
+    for line in ad_lines:
+        if line == "":
+            y += 14
+            continue
+        text = body_font.render(line, True, (20, 20, 20))
+        page.blit(text, (ad.centerx - text.get_width() // 2, y))
+        y += 24
+
+    return add_print_grain(page, dots=1400)
+
+
+def draw_newspaper(screen, newspaper_page):
+    """Show the paper tilted and zoomed in, the way the FNaF cutscene does."""
+    screen.fill((0, 0, 0))
+
+    tilted = pygame.transform.rotate(newspaper_page, NEWSPAPER_TILT)
+    rect = tilted.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+    screen.blit(tilted, rect.topleft)
+
+    # soft dark edges (kept light so the page stays bright)
+    vignette = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+    for i in range(45):
+        alpha = int(55 * (1 - i / 45))
+        pygame.draw.rect(
+            vignette,
+            (0, 0, 0, alpha),
+            (i, i, SCREEN_WIDTH - i * 2, SCREEN_HEIGHT - i * 2),
+            1,
+        )
+    screen.blit(vignette, (0, 0))
+
+
 def make_button(text, x, y, width, height):
     return {
         "text": text,
@@ -401,62 +552,132 @@ def draw_game_over(screen, big_font, font):
     screen.blit(tip, (SCREEN_WIDTH // 2 - tip.get_width() // 2, 340))
 
 
-def draw_title_screen(screen, big_font, font, small_font, bg_image, title_timer):
-    """Glitchy front menu with characters and Start Game."""
-    # dark aquarium background
-    screen.blit(bg_image, (0, 0))
+def draw_title_static(screen, amount=30):
+    """Light TV grain, like Freddy's menu."""
+    for _ in range(amount):
+        y = random.randint(0, SCREEN_HEIGHT - 1)
+        height = random.randint(1, 3)
+        shade = random.randint(0, 255)
+        bar = pygame.Surface((SCREEN_WIDTH, height), pygame.SRCALPHA)
+        bar.fill((shade, shade, shade, random.randint(20, 70)))
+        screen.blit(bar, (0, y))
+
+
+def draw_title_screen(screen, title_font, menu_font, small_font, bg_image, title_timer):
+    """Freddy-style glitchy title menu (no characters)."""
+    # background can twitch sideways a little
+    shake_x = 0
+    shake_y = 0
+    if random.random() < 0.15:
+        shake_x = random.randint(-4, 4)
+        shake_y = random.randint(-2, 2)
+
+    screen.blit(bg_image, (shake_x, shake_y))
+
+    # very dark overlay (Freddy menus are almost black)
     dark = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
     dark.fill((0, 0, 0))
-    dark.set_alpha(150)
+    dark.set_alpha(175)
     screen.blit(dark, (0, 0))
 
-    # soft scan lines (always a little glitchy)
-    for y in range(0, SCREEN_HEIGHT, 4):
+    # right side stays a bit more visible (like the character side of the menu)
+    right_dark = pygame.Surface((420, SCREEN_HEIGHT), pygame.SRCALPHA)
+    right_dark.fill((0, 0, 0, 80))
+    screen.blit(right_dark, (0, 0))
+
+    # scan lines
+    for y in range(0, SCREEN_HEIGHT, 3):
         pygame.draw.line(screen, (0, 0, 0), (0, y), (SCREEN_WIDTH, y), 1)
 
-    # big glitch flash every couple seconds
-    heavy_glitch = int(title_timer * 2) % 7 == 0
-    if heavy_glitch or random.random() < 0.08:
+    # constant grain
+    draw_title_static(screen, 35)
+
+    # bigger static bursts
+    if random.random() < 0.12:
         draw_camera_glitch(screen)
 
-    # characters (placeholder circles until real art)
-    # sometimes they flicker away for a spooky frame
-    show_characters = not (heavy_glitch and random.random() < 0.4)
-    if show_characters:
-        # Turtle (left)
-        pygame.draw.circle(screen, (50, 140, 70), (260, 340), 78)
-        pygame.draw.circle(screen, (80, 200, 90), (260, 340), 70)
-        turtle_name = font.render("TURTLE", True, (180, 255, 190))
-        screen.blit(turtle_name, (260 - turtle_name.get_width() // 2, 430))
+    # rare bright flash frame
+    if random.random() < 0.03:
+        flash = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        flash.fill((255, 255, 255, 40))
+        screen.blit(flash, (0, 0))
 
-        # Shark (right)
-        pygame.draw.circle(screen, (30, 80, 140), (740, 340), 78)
-        pygame.draw.circle(screen, (60, 140, 220), (740, 340), 70)
-        shark_name = font.render("SHARK", True, (180, 210, 255))
-        screen.blit(shark_name, (740 - shark_name.get_width() // 2, 430))
+    # title in the top-left (Freddy style)
+    line1 = title_font.render("5 Nights at", True, (230, 230, 230))
+    line2 = title_font.render("Deepwatch", True, (230, 230, 230))
+    if random.random() < 0.1:
+        # glitch the title sideways
+        jitter = random.randint(-5, 5)
+        screen.blit(line1, (70 + jitter, 80))
+        screen.blit(line2, (70 - jitter, 130))
+    else:
+        screen.blit(line1, (70, 80))
+        screen.blit(line2, (70, 130))
 
-    # title can shake / split when glitching
-    title_text = "Deepwatch Aquarium"
-    title_x = SCREEN_WIDTH // 2
-    title_y = 70
-    if heavy_glitch:
-        offset = random.randint(-6, 6)
-        red = big_font.render(title_text, True, (220, 60, 60))
-        cyan = big_font.render(title_text, True, (60, 200, 220))
-        screen.blit(red, (title_x - red.get_width() // 2 + offset, title_y))
-        screen.blit(cyan, (title_x - cyan.get_width() // 2 - offset, title_y))
-    title = big_font.render(title_text, True, (230, 240, 255))
-    screen.blit(title, (title_x - title.get_width() // 2, title_y))
+    # left menu, with >> on the selected option
+    blink_on = int(title_timer * 3) % 2 == 0
+    arrow = ">>" if blink_on else "  "
+    new_game = menu_font.render(arrow + " New Game", True, (240, 240, 240))
+    continue_text = menu_font.render("   Continue", True, (90, 90, 90))
+    screen.blit(new_game, (80, 280))
+    screen.blit(continue_text, (80, 330))
 
-    subtitle = font.render("Night Guard", True, (140, 200, 220))
-    screen.blit(subtitle, (SCREEN_WIDTH // 2 - subtitle.get_width() // 2, 120))
-
-    tip = small_font.render(
-        "Survive 12 AM to 6 AM. Watch cams. Mind the drain.",
+    # tiny footer like the real menus
+    footer = small_font.render(
+        "Survive until 6 AM",
         True,
-        (180, 200, 210),
+        (120, 120, 120),
     )
-    screen.blit(tip, (SCREEN_WIDTH // 2 - tip.get_width() // 2, 160))
+    screen.blit(footer, (80, 540))
+
+
+# How long the FNaF-style intro screens stay up
+NEWSPAPER_SECONDS = 3.0
+TWELVE_AM_SECONDS = 2.0
+
+# Exact filler pattern from FNaF 1 Help Wanted newspaper (Scott Cawthon),
+# with a softer aquarium-friendly ending for this kid game.
+NEWSPAPER_FILLER = (
+    "Blah. Blah. Blah, Blah. Blah. This ad has nothing to do with anything "
+    "relevant to the game. Blah. Blah. Blah. Blah. Blah. Chances are you "
+    "won't make it past Night 3. Blah. Blah. Yackity Smackity. Blah. Blah. "
+    "This probably isn't the best choice of a summer job, since you most "
+    "likely won't survive the week. I'd recommend being a cashier, sack boy, "
+    "or work in a warehouse. They are all very respectable jobs, and you "
+    "probably won't get chased by fish in them. Well, you might. But it would "
+    "be unlikely. Blah. Blah. "
+)
+
+
+def wrap_filler_lines(font, text, max_width):
+    """Break a long filler paragraph into lines that fit the newspaper."""
+    words = text.split()
+    lines = []
+    current = ""
+    for word in words:
+        test = word if current == "" else current + " " + word
+        if font.size(test)[0] <= max_width:
+            current = test
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines
+
+
+def draw_twelve_am(screen, huge_font, font):
+    """FNaF-style 12 AM screen right before the night starts."""
+    screen.fill((0, 0, 0))
+    # light static so it feels like the game transition
+    if random.random() < 0.7:
+        draw_title_static(screen, 25)
+
+    label = huge_font.render("12 AM", True, (230, 230, 230))
+    night = font.render("Night 1", True, (160, 160, 160))
+    screen.blit(label, (SCREEN_WIDTH // 2 - label.get_width() // 2, 240))
+    screen.blit(night, (SCREEN_WIDTH // 2 - night.get_width() // 2, 320))
 
 
 def draw_night_complete(screen, big_font, font):
@@ -495,9 +716,17 @@ def main():
     font = pygame.font.SysFont(None, 28)
     big_font = pygame.font.SysFont(None, 40)
     small_font = pygame.font.SysFont(None, 20)
+    title_font = pygame.font.SysFont(None, 64)
+    menu_font = pygame.font.SysFont(None, 36)
+    # FNaF prints its clippings in Courier
+    newspaper_font = pygame.font.SysFont("courier,couriernew", 52, bold=True)
+    newspaper_body = pygame.font.SysFont("courier,couriernew", 21)
+    huge_font = pygame.font.SysFont(None, 96)
 
     office_image = load_image("office.png", (700, 400), darker=True)
     title_bg = load_image("lobby.png", (SCREEN_WIDTH, SCREEN_HEIGHT), darker=True)
+    # FNaF-style Help Wanted newspaper page (built once, like a real cutscene image)
+    newspaper_page = make_fnaf_newspaper_page(newspaper_font, newspaper_body)
     camera_images = []
     for _label, filename in CAMERAS:
         # camera pictures fill the whole window
@@ -506,9 +735,11 @@ def main():
         )
 
     # start on the instructions screen
-    # "instructions", "playing", "game_over", or "win"
+    # "instructions", "newspaper", "twelve_am", "playing", "game_over", or "win"
     mode = "instructions"
     title_timer = 0.0
+    newspaper_timer = 0.0
+    twelve_am_timer = 0.0
 
     # False = looking at office, True = looking at cameras
     cameras_open = False
@@ -536,7 +767,8 @@ def main():
     # moved up a little so the oxygen bar fits underneath
     drain_button = make_button("CLOSE DRAIN", 20, 500, 180, 50)
     try_again_button = make_button("TRY AGAIN", 400, 400, 200, 50)
-    start_button = make_button("START GAME", 375, 500, 250, 50)
+    # invisible hit box over the "New Game" menu text
+    start_button = make_button("New Game", 70, 270, 250, 50)
     play_again_button = make_button("PLAY AGAIN", 400, 400, 200, 50)
     oxygen_bar_rect = pygame.Rect(20, 560, 180, 22)
     map_rect = pygame.Rect(580, 20, 400, 330)
@@ -573,11 +805,19 @@ def main():
                 if mode == "instructions":
                     if start_button["rect"].collidepoint(mouse_pos):
                         reset_night()
-                        mode = "playing"
+                        newspaper_timer = 0.0
+                        mode = "newspaper"
+                elif mode == "newspaper":
+                    # skip newspaper -> 12 AM screen (like starting Night 1)
+                    twelve_am_timer = 0.0
+                    mode = "twelve_am"
+                elif mode == "twelve_am":
+                    mode = "playing"
                 elif mode == "game_over":
                     if try_again_button["rect"].collidepoint(mouse_pos):
                         reset_night()
-                        mode = "playing"
+                        twelve_am_timer = 0.0
+                        mode = "twelve_am"
                 elif mode == "win":
                     if play_again_button["rect"].collidepoint(mouse_pos):
                         mode = "instructions"
@@ -599,6 +839,18 @@ def main():
 
         if mode == "instructions":
             title_timer += dt
+
+        if mode == "newspaper":
+            # FNaF shows the paper for a couple seconds, then Night 1 begins
+            newspaper_timer += dt
+            if newspaper_timer >= NEWSPAPER_SECONDS:
+                twelve_am_timer = 0.0
+                mode = "twelve_am"
+
+        if mode == "twelve_am":
+            twelve_am_timer += dt
+            if twelve_am_timer >= TWELVE_AM_SECONDS:
+                mode = "playing"
 
         if mode == "playing":
             # clock moves from 12 AM toward 6 AM
@@ -654,9 +906,12 @@ def main():
 
         if mode == "instructions":
             draw_title_screen(
-                screen, big_font, font, small_font, title_bg, title_timer,
+                screen, title_font, menu_font, small_font, title_bg, title_timer,
             )
-            draw_button(screen, start_button, font, selected=True)
+        elif mode == "newspaper":
+            draw_newspaper(screen, newspaper_page)
+        elif mode == "twelve_am":
+            draw_twelve_am(screen, huge_font, font)
         elif mode == "game_over":
             draw_game_over(screen, big_font, font)
             draw_button(screen, try_again_button, font, danger=True)
