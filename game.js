@@ -10,7 +10,12 @@ const TURTLE_MOVE_TIME = 20.0;
 const SHARK_MOVE_TIME = 20.0;
 const SECONDS_PER_HOUR = 20.0;
 const GLITCH_TIME = 0.5;
-const SOUND_COOLDOWN = 5.0;
+const SOUND_COOLDOWN = 3.5;
+const SOUND_IGNORE_CHANCE = 0.35;
+// seconds to crawl in from a next-door room if you only play sound once
+const SOUND_PULL_SECONDS = 6.0;
+// each successful sound while dragging bumps them farther in
+const SOUND_PULL_BOOST = 0.3;
 const NEWSPAPER_SECONDS = 3.0;
 const TWELVE_AM_SECONDS = 2.0;
 const NEWSPAPER_TILT = -5;
@@ -269,7 +274,7 @@ function cameraToRoomName(camIndex) {
 
 /**
  * Move one room closer to the target along the shortest path.
- * Far animals need several PLAY SOUND clicks to arrive.
+ * Far animals need several PLAY SOUND clicks to get next door.
  */
 function nextRoomToward(fromRoom, targetRoom, neighbors, blockedRooms) {
   if (fromRoom === targetRoom) return fromRoom;
@@ -292,13 +297,78 @@ function nextRoomToward(fromRoom, targetRoom, neighbors, blockedRooms) {
 
   if (!cameFrom.has(targetRoom)) return fromRoom;
 
-  // walk backward until the step right after fromRoom
   let step = targetRoom;
   while (cameFrom.get(step) !== fromRoom) {
     step = cameFrom.get(step);
     if (step == null) return fromRoom;
   }
   return step;
+}
+
+function roomsAreNeighbors(a, b, neighbors) {
+  return (neighbors[a] || []).includes(b);
+}
+
+/**
+ * Try to lure one threat toward the camera room.
+ * Far: one room hop. Next door: start / boost a slow crawl.
+ * Returns { room, pull, reacted }.
+ */
+function tryLureThreat(room, pull, target, neighbors, blockedRooms) {
+  const blocked = blockedRooms || [];
+  if (blocked.includes(target) && room !== target) {
+    return { room, pull, reacted: false };
+  }
+
+  // already crawling into this camera — extra sound pulls harder
+  if (pull && pull.to === target && pull.from === room) {
+    return {
+      room,
+      pull: {
+        from: pull.from,
+        to: pull.to,
+        progress: Math.min(1, pull.progress + SOUND_PULL_BOOST),
+      },
+      reacted: true,
+    };
+  }
+
+  // next door: begin a slow drag into the room
+  if (roomsAreNeighbors(room, target, neighbors) && !blocked.includes(target)) {
+    return {
+      room,
+      pull: {
+        from: room,
+        to: target,
+        progress: SOUND_PULL_BOOST * 0.4,
+      },
+      reacted: true,
+    };
+  }
+
+  // farther away: walk one room closer first
+  const next = nextRoomToward(room, target, neighbors, blocked);
+  if (next !== room) {
+    return { room: next, pull: null, reacted: true };
+  }
+
+  return { room, pull: null, reacted: false };
+}
+
+function updatePull(room, pull, dt) {
+  if (!pull) return { room, pull: null };
+  const progress = pull.progress + dt / SOUND_PULL_SECONDS;
+  if (progress >= 1) {
+    return { room: pull.to, pull: null };
+  }
+  return {
+    room,
+    pull: { from: pull.from, to: pull.to, progress },
+  };
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
 }
 
 function wrapFillerLines(text, maxChars) {
@@ -533,7 +603,7 @@ function drawTitleScreen(titleBg, titleTimer) {
   ctx.fillText("Survive until 6 AM", 80, 555);
 }
 
-function drawMap(mapRect, currentCam, sharkRoom, showDrains) {
+function drawMap(mapRect, currentCam, sharkRoom, showDrains, sharkPull) {
   ctx.save();
   ctx.translate(mapRect.x, mapRect.y);
 
@@ -570,7 +640,22 @@ function drawMap(mapRect, currentCam, sharkRoom, showDrains) {
 
   const shark = findRoom(sharkRoom);
   if (shark) {
-    const [cx, cy] = roomCenter(shark);
+    let cx;
+    let cy;
+    if (sharkPull) {
+      const fromRoom = findRoom(sharkPull.from);
+      const toRoom = findRoom(sharkPull.to);
+      if (fromRoom && toRoom) {
+        const [fx, fy] = roomCenter(fromRoom);
+        const [tx, ty] = roomCenter(toRoom);
+        cx = lerp(fx, tx, sharkPull.progress);
+        cy = lerp(fy, ty, sharkPull.progress);
+      } else {
+        [cx, cy] = roomCenter(shark);
+      }
+    } else {
+      [cx, cy] = roomCenter(shark);
+    }
     ctx.fillStyle = "rgba(60,140,220,0.9)";
     ctx.beginPath();
     ctx.arc(cx, cy, 10, 0, Math.PI * 2);
@@ -674,6 +759,10 @@ async function main() {
   let glitchTimer = 0;
   let soundCooldown = 0;
   let soundFlash = 0;
+  let soundIgnoredFlash = 0;
+  // slow crawl into a next-door camera room (null when not dragging)
+  let turtlePull = null;
+  let sharkPull = null;
 
   const openCamsButton = makeButton("CAMERAS", 780, 500, 180, 50);
   const closeCamsButton = makeButton("CLOSE CAMS", 800, 540, 170, 45);
@@ -700,6 +789,9 @@ async function main() {
     glitchTimer = 0;
     soundCooldown = 0;
     soundFlash = 0;
+    soundIgnoredFlash = 0;
+    turtlePull = null;
+    sharkPull = null;
   }
 
   canvas.addEventListener("click", (event) => {
@@ -732,24 +824,46 @@ async function main() {
         if (pointInButton(mapModeButton, mx, my)) showDrainMap = !showDrainMap;
         if (pointInButton(soundButton, mx, my) && soundCooldown <= 0) {
           const target = cameraToRoomName(currentCam);
+          let anyoneReacted = false;
           if (target !== null) {
-            const oldTurtle = turtleRoom;
-            const oldShark = sharkRoom;
-            // each click = one room closer (not a full teleport)
-            turtleRoom = nextRoomToward(turtleRoom, target, LAND_NEIGHBORS);
-            const sharkBlocked = drainClosed ? ["Office"] : [];
-            sharkRoom = nextRoomToward(
-              sharkRoom,
-              target,
-              DRAIN_NEIGHBORS,
-              sharkBlocked
-            );
-            if (turtleRoom !== oldTurtle || sharkRoom !== oldShark) {
+            // each animal may ignore this sound on its own
+            if (Math.random() >= SOUND_IGNORE_CHANCE) {
+              const turtleResult = tryLureThreat(
+                turtleRoom,
+                turtlePull,
+                target,
+                LAND_NEIGHBORS,
+                []
+              );
+              turtleRoom = turtleResult.room;
+              turtlePull = turtleResult.pull;
+              if (turtleResult.reacted) anyoneReacted = true;
+            }
+
+            if (Math.random() >= SOUND_IGNORE_CHANCE) {
+              const sharkBlocked = drainClosed ? ["Office"] : [];
+              const sharkResult = tryLureThreat(
+                sharkRoom,
+                sharkPull,
+                target,
+                DRAIN_NEIGHBORS,
+                sharkBlocked
+              );
+              sharkRoom = sharkResult.room;
+              sharkPull = sharkResult.pull;
+              if (sharkResult.reacted) anyoneReacted = true;
+            }
+
+            if (anyoneReacted) {
               glitchTimer = GLITCH_TIME;
+              soundFlash = 0.8;
+              soundIgnoredFlash = 0;
+            } else {
+              soundFlash = 0;
+              soundIgnoredFlash = 1.0;
             }
           }
           soundCooldown = SOUND_COOLDOWN;
-          soundFlash = 0.8;
         }
         const clicked = mapClickToCamera(mx, my, mapRect);
         if (clicked !== null) currentCam = clicked;
@@ -796,21 +910,35 @@ async function main() {
       if (glitchTimer > 0) glitchTimer -= dt;
       if (soundCooldown > 0) soundCooldown -= dt;
       if (soundFlash > 0) soundFlash -= dt;
+      if (soundIgnoredFlash > 0) soundIgnoredFlash -= dt;
+
+      // slow crawl continues even if you wait
+      const turtlePullUpdate = updatePull(turtleRoom, turtlePull, dt);
+      turtleRoom = turtlePullUpdate.room;
+      turtlePull = turtlePullUpdate.pull;
+      const sharkPullUpdate = updatePull(sharkRoom, sharkPull, dt);
+      sharkRoom = sharkPullUpdate.room;
+      sharkPull = sharkPullUpdate.pull;
 
       turtleTimer += dt;
       if (turtleTimer >= TURTLE_MOVE_TIME) {
         turtleTimer = 0;
-        const oldRoom = turtleRoom;
-        turtleRoom = moveThreat(turtleRoom, LAND_NEIGHBORS);
-        if (turtleRoom !== oldRoom) glitchTimer = GLITCH_TIME;
+        // don't wander off while being dragged by sound
+        if (!turtlePull) {
+          const oldRoom = turtleRoom;
+          turtleRoom = moveThreat(turtleRoom, LAND_NEIGHBORS);
+          if (turtleRoom !== oldRoom) glitchTimer = GLITCH_TIME;
+        }
       }
 
       sharkTimer += dt;
       if (sharkTimer >= SHARK_MOVE_TIME) {
         sharkTimer = 0;
-        const oldRoom = sharkRoom;
-        sharkRoom = moveShark(sharkRoom, drainClosed);
-        if (sharkRoom !== oldRoom) glitchTimer = GLITCH_TIME;
+        if (!sharkPull) {
+          const oldRoom = sharkRoom;
+          sharkRoom = moveShark(sharkRoom, drainClosed);
+          if (sharkRoom !== oldRoom) glitchTimer = GLITCH_TIME;
+        }
       }
     }
 
@@ -874,33 +1002,68 @@ async function main() {
       if (glitchTimer > 0) {
         drawCameraGlitch();
       } else {
-        const turtleData = findRoom(turtleRoom);
-        if (turtleData && turtleData[1] === currentCam) {
+        const camRoom = cameraToRoomName(currentCam);
+        // Turtle on this camera (or slowly crawling in / out)
+        if (turtlePull && (turtlePull.to === camRoom || turtlePull.from === camRoom)) {
+          const t = turtlePull.progress;
+          let x;
+          if (turtlePull.to === camRoom) {
+            x = lerp(80, SCREEN_WIDTH / 2 - 50, t);
+          } else {
+            x = lerp(SCREEN_WIDTH / 2 - 50, SCREEN_WIDTH - 80, t);
+          }
           ctx.fillStyle = "rgb(80,200,90)";
           ctx.beginPath();
-          ctx.arc(SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2, 40, 0, Math.PI * 2);
+          ctx.arc(x, SCREEN_HEIGHT / 2, 40, 0, Math.PI * 2);
           ctx.fill();
+        } else {
+          const turtleData = findRoom(turtleRoom);
+          if (turtleData && turtleData[1] === currentCam) {
+            ctx.fillStyle = "rgb(80,200,90)";
+            ctx.beginPath();
+            ctx.arc(SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2, 40, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
-        const sharkData = findRoom(sharkRoom);
-        if (sharkData && sharkData[1] === currentCam) {
+
+        if (sharkPull && (sharkPull.to === camRoom || sharkPull.from === camRoom)) {
+          const t = sharkPull.progress;
+          let x;
+          if (sharkPull.to === camRoom) {
+            x = lerp(SCREEN_WIDTH - 80, SCREEN_WIDTH / 2 + 50, t);
+          } else {
+            x = lerp(SCREEN_WIDTH / 2 + 50, 80, t);
+          }
           ctx.fillStyle = "rgb(60,140,220)";
           ctx.beginPath();
-          ctx.arc(SCREEN_WIDTH / 2 + 50, SCREEN_HEIGHT / 2, 40, 0, Math.PI * 2);
+          ctx.arc(x, SCREEN_HEIGHT / 2, 40, 0, Math.PI * 2);
           ctx.fill();
+        } else {
+          const sharkData = findRoom(sharkRoom);
+          if (sharkData && sharkData[1] === currentCam) {
+            ctx.fillStyle = "rgb(60,140,220)";
+            ctx.beginPath();
+            ctx.arc(SCREEN_WIDTH / 2 + 50, SCREEN_HEIGHT / 2, 40, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       }
 
-      drawMap(mapRect, currentCam, sharkRoom, showDrainMap);
+      drawMap(mapRect, currentCam, sharkRoom, showDrainMap, sharkPull);
       drawButton(mapModeButton, { selected: showDrainMap, transparent: true });
       drawButton(soundButton, {
         selected: soundFlash > 0,
-        danger: soundCooldown > 0,
+        danger: soundCooldown > 0 || soundIgnoredFlash > 0,
         transparent: true,
       });
       if (soundFlash > 0) {
         ctx.fillStyle = "rgb(255,230,80)";
         ctx.font = "bold 36px sans-serif";
         ctx.fillText("SOUND!", 20, 520);
+      } else if (soundIgnoredFlash > 0) {
+        ctx.fillStyle = "rgb(220,140,140)";
+        ctx.font = "bold 28px sans-serif";
+        ctx.fillText("IGNORED...", 20, 520);
       }
       drawButton(closeCamsButton, { transparent: true });
       drawClock(nightHours, 20, 45);
