@@ -42,7 +42,7 @@ const CAMERAS = [
 
 // short name, camera index (null = office), x, y, w, h
 const MAP_ROOMS = [
-  ["Cafe", 13, 20, 40, 64, 32],
+  ["Cafe", 13, 12, 28, 84, 40],
   ["Kelp", 11, 200, 40, 64, 32],
   ["Penguin", 10, 290, 40, 64, 32],
   ["Gift", 1, 20, 95, 64, 32],
@@ -146,14 +146,15 @@ function loadImage(src) {
     const img = new Image();
     img.onload = () => resolve(img);
     img.onerror = reject;
-    img.src = src;
+    // cache-bust so new room art shows after refresh
+    img.src = src + (src.includes("?") ? "&" : "?") + "v=cafe2";
   });
 }
 
-/** Draw an image scaled to size, then darken it a little for night. */
+/** Draw an image scaled to size. Slight night tint only. */
 function drawDarkImage(targetCtx, image, x, y, width, height) {
   targetCtx.drawImage(image, x, y, width, height);
-  targetCtx.fillStyle = "rgba(0, 0, 0, 0.27)";
+  targetCtx.fillStyle = "rgba(0, 0, 0, 0.08)";
   targetCtx.fillRect(x, y, width, height);
 }
 
@@ -741,6 +742,7 @@ async function main() {
     cameraImages.push(await loadImage("images/" + filename));
   }
   const newspaperPage = makeNewspaperPage();
+  const urlRoom = new URLSearchParams(window.location.search).get("room");
 
   let mode = "instructions";
   let titleTimer = 0;
@@ -792,6 +794,18 @@ async function main() {
     soundIgnoredFlash = 0;
     turtlePull = null;
     sharkPull = null;
+  }
+
+  // tip: open http://.../?room=Cafe to jump straight to that camera
+  if (urlRoom) {
+    for (const [name, cam] of MAP_ROOMS) {
+      if (name.toLowerCase() === urlRoom.toLowerCase() && cam !== null) {
+        currentCam = cam;
+        camerasOpen = true;
+        mode = "playing";
+        break;
+      }
+    }
   }
 
   canvas.addEventListener("click", (event) => {
@@ -998,6 +1012,13 @@ async function main() {
       drawButton(playAgainButton, { selected: true });
     } else if (mode === "playing" && camerasOpen) {
       drawDarkImage(ctx, cameraImages[currentCam], 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+      // always show which camera you're on (easy to check Cafe art)
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillRect(20, 70, 360, 44);
+      ctx.fillStyle = "rgb(255,240,200)";
+      ctx.font = "bold 28px sans-serif";
+      ctx.fillText(CAMERAS[currentCam][0], 30, 100);
 
       if (glitchTimer > 0) {
         drawCameraGlitch();
