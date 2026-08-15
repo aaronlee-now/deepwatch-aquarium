@@ -1,7 +1,8 @@
 """
-Aquarium Night Guard - camera prototype
-Click CAMERAS, then pick a room on the map.
-Turtle (land) hides from the map. Shark (sea) shows on the map.
+DEPRECATED — use the browser game instead (index.html + game.js).
+
+Old Aquarium Night Guard pygame prototype. Kept for learning only.
+The main game is the HTML/JavaScript version.
 """
 
 import random
@@ -23,6 +24,9 @@ SECONDS_PER_HOUR = 20.0
 
 # camera static length after a creature moves
 GLITCH_TIME = 0.5
+
+# how long you must wait between sound lures
+SOUND_COOLDOWN = 5.0
 
 # camera list: button label, image file
 CAMERAS = [
@@ -422,6 +426,25 @@ def move_shark(shark_room, drain_closed):
     return random.choice(choices)
 
 
+def camera_to_room_name(cam_index):
+    """Turn a camera number into a map room name like 'Lobby'."""
+    for name, cam, _x, _y, _w, _h in MAP_ROOMS:
+        if cam == cam_index:
+            return name
+    return None
+
+
+def lure_if_neighbor(threat_room, target_room, neighbors):
+    """
+    If the threat is next to the target room, pull it there.
+    Otherwise leave it where it is.
+    """
+    nearby = neighbors.get(target_room, [])
+    if threat_room in nearby:
+        return target_room
+    return threat_room
+
+
 def draw_camera_glitch(screen):
     """Draw short camera static over the feed."""
     for _ in range(50):
@@ -760,10 +783,16 @@ def main():
     night_hours = 0.0
     # counts down while cameras are glitching
     glitch_timer = 0.0
+    # must wait before using PLAY SOUND again
+    sound_cooldown = 0.0
+    # short flash of "SOUND!" text on the camera
+    sound_flash = 0.0
 
     open_cams_button = make_button("CAMERAS", 780, 500, 180, 50)
     close_cams_button = make_button("CLOSE CAMS", 800, 540, 170, 45)
     map_mode_button = make_button("SHOW DRAINS", 600, 360, 180, 40)
+    # play sound lure while looking at a camera
+    sound_button = make_button("PLAY SOUND", 20, 540, 170, 45)
     # moved up a little so the oxygen bar fits underneath
     drain_button = make_button("CLOSE DRAIN", 20, 500, 180, 50)
     try_again_button = make_button("TRY AGAIN", 400, 400, 200, 50)
@@ -778,6 +807,7 @@ def main():
         nonlocal cameras_open, current_cam, drain_closed, oxygen
         nonlocal turtle_room, turtle_timer, shark_room, shark_timer
         nonlocal show_drain_map, night_hours, glitch_timer
+        nonlocal sound_cooldown, sound_flash
         cameras_open = False
         current_cam = 0
         drain_closed = False
@@ -789,6 +819,8 @@ def main():
         show_drain_map = False
         night_hours = 0.0
         glitch_timer = 0.0
+        sound_cooldown = 0.0
+        sound_flash = 0.0
 
     running = True
     while running:
@@ -827,6 +859,30 @@ def main():
                             cameras_open = False
                         if map_mode_button["rect"].collidepoint(mouse_pos):
                             show_drain_map = not show_drain_map
+                        if (
+                            sound_button["rect"].collidepoint(mouse_pos)
+                            and sound_cooldown <= 0
+                        ):
+                            # lure animals that are next to this camera room
+                            target = camera_to_room_name(current_cam)
+                            if target is not None:
+                                old_turtle = turtle_room
+                                old_shark = shark_room
+                                turtle_room = lure_if_neighbor(
+                                    turtle_room, target, LAND_NEIGHBORS,
+                                )
+                                # closed office drain still blocks the shark
+                                if not (drain_closed and target == "Office"):
+                                    shark_room = lure_if_neighbor(
+                                        shark_room, target, DRAIN_NEIGHBORS,
+                                    )
+                                if (
+                                    turtle_room != old_turtle
+                                    or shark_room != old_shark
+                                ):
+                                    glitch_timer = GLITCH_TIME
+                            sound_cooldown = SOUND_COOLDOWN
+                            sound_flash = 0.8
                         clicked_cam = map_click_to_camera(mouse_pos, map_rect)
                         if clicked_cam is not None:
                             current_cam = clicked_cam
@@ -872,6 +928,11 @@ def main():
             if glitch_timer > 0:
                 glitch_timer -= dt
 
+            if sound_cooldown > 0:
+                sound_cooldown -= dt
+            if sound_flash > 0:
+                sound_flash -= dt
+
             # Turtle may move on door paths, or stay put
             turtle_timer += dt
             if turtle_timer >= TURTLE_MOVE_TIME:
@@ -900,6 +961,11 @@ def main():
             map_mode_button["text"] = "SHOW DOORS"
         else:
             map_mode_button["text"] = "SHOW DRAINS"
+
+        if sound_cooldown > 0:
+            sound_button["text"] = "WAIT " + str(int(sound_cooldown) + 1) + "s"
+        else:
+            sound_button["text"] = "PLAY SOUND"
 
         # draw background
         screen.fill((15, 20, 30))
@@ -954,6 +1020,15 @@ def main():
                 screen, map_mode_button, font,
                 selected=show_drain_map, transparent=True,
             )
+            draw_button(
+                screen, sound_button, font,
+                selected=(sound_flash > 0),
+                danger=(sound_cooldown > 0),
+                transparent=True,
+            )
+            if sound_flash > 0:
+                beep = big_font.render("SOUND!", True, (255, 230, 80))
+                screen.blit(beep, (20, 490))
             draw_button(screen, close_cams_button, font, transparent=True)
             draw_clock(screen, big_font, night_hours, 20, 20)
         elif mode == "playing":

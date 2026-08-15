@@ -1,6 +1,6 @@
 /**
- * Deepwatch Aquarium - browser version for GitHub Pages
- * Same ideas as game.py, drawn with HTML5 Canvas.
+ * Deepwatch Aquarium — main game (browser / GitHub Pages)
+ * HTML5 Canvas version. The old Python game.py is deprecated.
  */
 
 const SCREEN_WIDTH = 1000;
@@ -10,6 +10,7 @@ const TURTLE_MOVE_TIME = 20.0;
 const SHARK_MOVE_TIME = 20.0;
 const SECONDS_PER_HOUR = 20.0;
 const GLITCH_TIME = 0.5;
+const SOUND_COOLDOWN = 5.0;
 const NEWSPAPER_SECONDS = 3.0;
 const TWELVE_AM_SECONDS = 2.0;
 const NEWSPAPER_TILT = -5;
@@ -257,6 +258,47 @@ function moveShark(sharkRoom, drainClosed) {
   }
   choices.push(sharkRoom);
   return choices[Math.floor(Math.random() * choices.length)];
+}
+
+function cameraToRoomName(camIndex) {
+  for (const [name, cam] of MAP_ROOMS) {
+    if (cam === camIndex) return name;
+  }
+  return null;
+}
+
+/**
+ * Move one room closer to the target along the shortest path.
+ * Far animals need several PLAY SOUND clicks to arrive.
+ */
+function nextRoomToward(fromRoom, targetRoom, neighbors, blockedRooms) {
+  if (fromRoom === targetRoom) return fromRoom;
+
+  const blocked = blockedRooms || [];
+  const queue = [fromRoom];
+  const cameFrom = new Map();
+  cameFrom.set(fromRoom, null);
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current === targetRoom) break;
+    for (const next of neighbors[current] || []) {
+      if (blocked.includes(next)) continue;
+      if (cameFrom.has(next)) continue;
+      cameFrom.set(next, current);
+      queue.push(next);
+    }
+  }
+
+  if (!cameFrom.has(targetRoom)) return fromRoom;
+
+  // walk backward until the step right after fromRoom
+  let step = targetRoom;
+  while (cameFrom.get(step) !== fromRoom) {
+    step = cameFrom.get(step);
+    if (step == null) return fromRoom;
+  }
+  return step;
 }
 
 function wrapFillerLines(text, maxChars) {
@@ -630,10 +672,13 @@ async function main() {
   let showDrainMap = false;
   let nightHours = 0;
   let glitchTimer = 0;
+  let soundCooldown = 0;
+  let soundFlash = 0;
 
   const openCamsButton = makeButton("CAMERAS", 780, 500, 180, 50);
   const closeCamsButton = makeButton("CLOSE CAMS", 800, 540, 170, 45);
   const mapModeButton = makeButton("SHOW DRAINS", 600, 360, 180, 40);
+  const soundButton = makeButton("PLAY SOUND", 20, 540, 170, 45);
   const drainButton = makeButton("CLOSE DRAIN", 20, 500, 180, 50);
   const tryAgainButton = makeButton("TRY AGAIN", 400, 400, 200, 50);
   const startButton = makeButton("New Game", 70, 270, 250, 50);
@@ -653,6 +698,8 @@ async function main() {
     showDrainMap = false;
     nightHours = 0;
     glitchTimer = 0;
+    soundCooldown = 0;
+    soundFlash = 0;
   }
 
   canvas.addEventListener("click", (event) => {
@@ -683,6 +730,27 @@ async function main() {
       if (camerasOpen) {
         if (pointInButton(closeCamsButton, mx, my)) camerasOpen = false;
         if (pointInButton(mapModeButton, mx, my)) showDrainMap = !showDrainMap;
+        if (pointInButton(soundButton, mx, my) && soundCooldown <= 0) {
+          const target = cameraToRoomName(currentCam);
+          if (target !== null) {
+            const oldTurtle = turtleRoom;
+            const oldShark = sharkRoom;
+            // each click = one room closer (not a full teleport)
+            turtleRoom = nextRoomToward(turtleRoom, target, LAND_NEIGHBORS);
+            const sharkBlocked = drainClosed ? ["Office"] : [];
+            sharkRoom = nextRoomToward(
+              sharkRoom,
+              target,
+              DRAIN_NEIGHBORS,
+              sharkBlocked
+            );
+            if (turtleRoom !== oldTurtle || sharkRoom !== oldShark) {
+              glitchTimer = GLITCH_TIME;
+            }
+          }
+          soundCooldown = SOUND_COOLDOWN;
+          soundFlash = 0.8;
+        }
         const clicked = mapClickToCamera(mx, my, mapRect);
         if (clicked !== null) currentCam = clicked;
       } else {
@@ -726,6 +794,8 @@ async function main() {
       if (oxygen <= 0) mode = "game_over";
 
       if (glitchTimer > 0) glitchTimer -= dt;
+      if (soundCooldown > 0) soundCooldown -= dt;
+      if (soundFlash > 0) soundFlash -= dt;
 
       turtleTimer += dt;
       if (turtleTimer >= TURTLE_MOVE_TIME) {
@@ -746,6 +816,10 @@ async function main() {
 
     drainButton.text = drainClosed ? "OPEN DRAIN" : "CLOSE DRAIN";
     mapModeButton.text = showDrainMap ? "SHOW DOORS" : "SHOW DRAINS";
+    soundButton.text =
+      soundCooldown > 0
+        ? "WAIT " + (Math.floor(soundCooldown) + 1) + "s"
+        : "PLAY SOUND";
 
     ctx.fillStyle = "rgb(15,20,30)";
     ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -818,6 +892,16 @@ async function main() {
 
       drawMap(mapRect, currentCam, sharkRoom, showDrainMap);
       drawButton(mapModeButton, { selected: showDrainMap, transparent: true });
+      drawButton(soundButton, {
+        selected: soundFlash > 0,
+        danger: soundCooldown > 0,
+        transparent: true,
+      });
+      if (soundFlash > 0) {
+        ctx.fillStyle = "rgb(255,230,80)";
+        ctx.font = "bold 36px sans-serif";
+        ctx.fillText("SOUND!", 20, 520);
+      }
       drawButton(closeCamsButton, { transparent: true });
       drawClock(nightHours, 20, 45);
     } else if (mode === "playing") {
