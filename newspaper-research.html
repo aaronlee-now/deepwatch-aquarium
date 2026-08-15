@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FNaF Newspaper Research — Deepwatch Aquarium</title>
+  <style>
+    :root {
+      --ink: #1a1814;
+      --paper: #f2eee6;
+      --aged: #e4ddd0;
+      --red: #b01010;
+      --muted: #5a5348;
+      --bg: #12100e;
+      --ad: #f7f5f0;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Georgia", "Times New Roman", serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+    }
+
+    .page {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+
+    .paper {
+      background: linear-gradient(180deg, var(--paper), var(--aged));
+      border: 3px solid #2a241c;
+      padding: 1.75rem 1.5rem 2rem;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+    }
+
+    h1 {
+      margin: 0 0 0.25rem;
+      font-size: clamp(1.6rem, 4vw, 2.2rem);
+      letter-spacing: 0.02em;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.95rem;
+      margin-bottom: 1.25rem;
+      border-bottom: 3px double #2a241c;
+      padding-bottom: 0.85rem;
+    }
+
+    h2 {
+      font-size: 1.15rem;
+      margin: 1.6rem 0 0.55rem;
+      text-transform: uppercase;
+      border-left: 4px solid var(--red);
+      padding-left: 0.6rem;
+    }
+
+    p, li { font-size: 1rem; }
+
+    ul { padding-left: 1.2rem; }
+
+    .ad-box {
+      margin: 1.25rem 0;
+      border: 5px solid #111;
+      background: var(--ad);
+      padding: 1rem 1.1rem;
+      font-family: "Courier New", Courier, monospace;
+    }
+
+    .ad-box h3 {
+      margin: 0 0 0.35rem;
+      text-align: center;
+      font-size: 1.45rem;
+      letter-spacing: 0.06em;
+      font-family: "Courier New", Courier, monospace;
+    }
+
+    .ad-box .place {
+      text-align: center;
+      font-weight: bold;
+      margin-bottom: 0.75rem;
+    }
+
+    .ad-box p {
+      margin: 0.35rem 0;
+      text-align: center;
+      font-size: 0.95rem;
+    }
+
+    .filler {
+      background: rgba(0, 0, 0, 0.04);
+      border: 1px dashed #7a7164;
+      padding: 0.85rem 1rem;
+      font-size: 0.88rem;
+      color: #3d3830;
+      font-style: italic;
+      font-family: "Courier New", Courier, monospace;
+    }
+
+    .note {
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    .style-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.65rem;
+      margin: 0.85rem 0 0.4rem;
+    }
+
+    @media (min-width: 640px) {
+      .style-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .style-card {
+      border: 1px solid #9a9183;
+      background: rgba(255, 255, 255, 0.35);
+      padding: 0.75rem 0.85rem;
+    }
+
+    .style-card strong {
+      display: block;
+      margin-bottom: 0.2rem;
+      text-transform: uppercase;
+      font-size: 0.82rem;
+      letter-spacing: 0.04em;
+    }
+
+    .style-card p {
+      margin: 0;
+      font-size: 0.92rem;
+    }
+
+    .sources a { color: #5a3d1c; }
+
+    .deepwatch {
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 2px solid #2a241c;
+    }
+
+    .pill {
+      display: inline-block;
+      background: var(--red);
+      color: #fff;
+      font-family: system-ui, sans-serif;
+      font-size: 0.75rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 999px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      align-items: center;
+      margin: 0.75rem 0 0.25rem;
+      font-family: system-ui, sans-serif;
+      font-size: 0.88rem;
+    }
+
+    .flow span {
+      background: #222;
+      color: #f2eee6;
+      padding: 0.35rem 0.65rem;
+      border-radius: 4px;
+    }
+
+    .flow .arrow {
+      background: transparent;
+      color: var(--muted);
+      padding: 0;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <article class="paper">
+      <p class="pill">Research notes</p>
+      <h1>FNaF Newspaper Research</h1>
+      <p class="subtitle">
+        What the real Five Nights at Freddy’s newspapers do —
+        and how Deepwatch Aquarium copies the idea
+      </p>
+
+      <h2>1. When it shows up</h2>
+      <p>
+        In <strong>Five Nights at Freddy’s 1</strong>, clicking
+        <strong>New Game</strong> shows a newspaper for a few seconds.
+        Then the first night starts (often with a <strong>12 AM</strong> clock).
+      </p>
+      <div class="flow" aria-label="Game intro flow">
+        <span>New Game</span>
+        <span class="arrow">→</span>
+        <span>HELP WANTED newspaper</span>
+        <span class="arrow">→</span>
+        <span>12 AM</span>
+        <span class="arrow">→</span>
+        <span>Night 1</span>
+      </div>
+      <p class="note">
+        Deepwatch uses the same order: newspaper → 12 AM → Night 1.
+      </p>
+
+      <h2>2. The HELP WANTED ad (exact idea)</h2>
+      <p>
+        The main thing is not a long news story. It is a job ad in a thick black box.
+        Fans copied the wording carefully. Here is the FNaF 1 version:
+      </p>
+
+      <div class="ad-box">
+        <h3>HELP WANTED</h3>
+        <p class="place">Freddy Fazbear’s Pizza</p>
+        <p>Family pizzeria looking for security guard to work the nightshift.</p>
+        <p>12 am to 6am.</p>
+        <p>Monitor cameras, ensure safety of equipment and animatronic characters.</p>
+        <p>Not responsible for injury/dismemberment.</p>
+        <p>$120 a week.</p>
+        <p>To apply, call:</p>
+        <p>1-888-FAZ-FAZBEAR</p>
+      </div>
+      <p class="note">
+        Later game updates changed the phone number in some versions
+        (for example to a 1-555 number). The job text stayed the same idea.
+      </p>
+
+      <h2>3. How the page looks (style research)</h2>
+      <p>
+        The Help Wanted screen is meant to feel like a close-up photo of a
+        newspaper clipping, not a clean website.
+      </p>
+      <div class="style-grid">
+        <div class="style-card">
+          <strong>Font</strong>
+          <p>Courier (typewriter look). Fans and font guides match this to the clippings.</p>
+        </div>
+        <div class="style-card">
+          <strong>Colors</strong>
+          <p>Mostly grayscale / gray newsprint — not bright yellow paper.</p>
+        </div>
+        <div class="style-card">
+          <strong>Camera angle</strong>
+          <p>Zoomed in and slightly tilted / crooked on a black background.</p>
+        </div>
+        <div class="style-card">
+          <strong>Background text</strong>
+          <p>Busy columns around the ad, blurred so you cannot read them easily.</p>
+        </div>
+      </div>
+
+      <h2>4. The blurry “blah blah” filler</h2>
+      <p>
+        Around the ad, the same paragraph is repeated many times
+        (about nine times on the FNaF 1 page). Fans un-blurred it.
+        It is a joke from the creator, Scott Cawthon — not secret lore.
+      </p>
+      <div class="filler">
+        Blah. Blah. Blah, Blah. Blah. This ad has nothing to do with anything
+        relevant to the game. Blah. Blah. Blah. Blah. Blah. Chances are you
+        won’t make it past Night 3. Blah. Blah. Yackity Smackity. Blah. Blah.
+        This probably isn’t the best choice of a summer job, since you most
+        likely won’t survive the week. I’d recommend being a cashier, sack boy,
+        or work in a warehouse. They are all very respectable jobs, and you
+        probably won’t be killed by them. Well, you might. But it would be
+        unlikely. Blah. Blah.
+      </div>
+
+      <h2>5. Other newspapers in FNaF 1</h2>
+      <p>
+        Later nights can show other clippings about the restaurant’s past.
+        Those are different from the New Game Help Wanted ad.
+        For a kid-friendly aquarium game, we copy the
+        <strong>Help Wanted intro</strong>, not the spooky later articles.
+      </p>
+
+      <h2>6. Why this design works for a game</h2>
+      <ul>
+        <li>It feels like a real job posting, so the story starts fast.</li>
+        <li>The hours <strong>12 AM to 6 AM</strong> teach the win goal.</li>
+        <li>“Monitor cameras” tells you the main gameplay.</li>
+        <li>The silly filler text makes the page look busy like a real paper.</li>
+        <li>A short wait, then the night begins — no long movie needed.</li>
+      </ul>
+
+      <div class="deepwatch">
+        <h2>7. Deepwatch Aquarium version</h2>
+        <p>Our Python game copies the FNaF recipe:</p>
+        <ul>
+          <li><strong>HELP WANTED</strong> box in the center</li>
+          <li>Deepwatch Aquarium night-guard job</li>
+          <li>12 am to 6am + monitor cameras</li>
+          <li>$120 a week and phone: 1-888-DEEP-FISH</li>
+          <li>Kid-friendly warning (soggy shoes / runaway crabs)</li>
+          <li>Courier font + gray newsprint + tilt</li>
+          <li>Blurred “blah” columns around the ad</li>
+          <li>Auto-continues after a few seconds (or click)</li>
+        </ul>
+        <div class="ad-box">
+          <h3>HELP WANTED</h3>
+          <p class="place">Deepwatch Aquarium</p>
+          <p>Family aquarium looking for security guard to work the nightshift.</p>
+          <p>12 am to 6am.</p>
+          <p>Monitor cameras, ensure safety of equipment and sea exhibits.</p>
+          <p>Not responsible for soggy shoes or runaway crabs.</p>
+          <p>$120 a week.</p>
+          <p>To apply, call:</p>
+          <p>1-888-DEEP-FISH</p>
+        </div>
+        <p>
+          Open the Python game, click <strong>New Game</strong>, and you will
+          see that newspaper before Night 1.
+        </p>
+      </div>
+
+      <h2>Sources</h2>
+      <ul class="sources">
+        <li>
+          <a href="https://freddy-fazbears-pizza.fandom.com/wiki/Cinematics_(FNaF1)" target="_blank" rel="noreferrer">
+            FNaF Wiki — Cinematics (FNaF1)
+          </a>
+        </li>
+        <li>
+          <a href="https://fnaflore.com/resources/newspapers-and-clippings/fnaf1/" target="_blank" rel="noreferrer">
+            FNaFLore — FNaF 1 Newspapers and Clippings
+          </a>
+        </li>
+        <li>
+          <a href="https://pastebin.com/r6709kGA" target="_blank" rel="noreferrer">
+            FNAF Newspaper Transcripts (community copy)
+          </a>
+        </li>
+        <li>
+          <a href="https://tcrf.net/Five_Nights_at_Freddy%27s_(Windows)/Version_Differences" target="_blank" rel="noreferrer">
+            TCRF — FNaF Windows version differences (tilt / phone number notes)
+          </a>
+        </li>
+        <li>
+          <a href="https://fontswan.com/fnaf-font/" target="_blank" rel="noreferrer">
+            FNaF Font guide (Courier for newspaper clippings)
+          </a>
+        </li>
+      </ul>
+    </article>
+  </main>
+</body>
+</html>
