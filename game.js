@@ -21,6 +21,11 @@ const SOUND_PULL_SECONDS = 6.0;
 const SOUND_PULL_BOOST = 0.3;
 const NEWSPAPER_SECONDS = 3.0;
 const TWELVE_AM_SECONDS = 2.0;
+// threat in office while you're on cams — animals mess with the controls
+const CAMERA_HIJACK_SECONDS = 15.0;
+const HIJACK_CAM_SWITCH_MIN = 0.18;
+const HIJACK_CAM_SWITCH_MAX = 0.5;
+const JUMPSCARE_SECONDS = 2.8;
 const NEWSPAPER_TILT = -5;
 const PAPER_GRAY = [228, 226, 220];
 
@@ -565,6 +570,85 @@ function drawNewspaper(newspaperPage) {
   }
 }
 
+function threatEntersOffice(oldRoom, newRoom) {
+  return oldRoom !== "Office" && newRoom === "Office";
+}
+
+const JUMPSCARE_MESSAGES = {
+  turtle: "The turtle crushed you!",
+  shark: "The shark attacked!",
+  crab: "The crab got you!",
+  octopus: "The octopus grabbed you!",
+  ray: "The ray struck!",
+};
+
+function drawCameraGlitchHeavy() {
+  drawCameraGlitch();
+  if (Math.random() < 0.65) drawCameraGlitch();
+  for (let i = 0; i < 8; i++) {
+    const w = 60 + Math.floor(Math.random() * 200);
+    const h = 4 + Math.floor(Math.random() * 20);
+    const x = Math.floor(Math.random() * (SCREEN_WIDTH - w));
+    const y = Math.floor(Math.random() * (SCREEN_HEIGHT - h));
+    ctx.fillStyle = `rgba(${Math.floor(Math.random() * 256)},0,0,0.45)`;
+    ctx.fillRect(x, y, w, h);
+  }
+}
+
+function drawCameraHijackWarning(secondsLeft) {
+  ctx.fillStyle = "rgba(0,0,0,0.5)";
+  ctx.fillRect(0, 0, SCREEN_WIDTH, 120);
+  ctx.fillStyle = "rgb(255,70,70)";
+  ctx.font = "bold 34px sans-serif";
+  const jitter = Math.floor(Math.random() * 5) - 2;
+  ctx.fillText("!! CAMERAS HIJACKED !!", 24 + jitter, 42);
+  ctx.fillStyle = "rgb(255,220,180)";
+  ctx.font = "22px sans-serif";
+  ctx.fillText("Something is messing with the controls...", 24, 78);
+  ctx.fillStyle = "rgb(200,160,140)";
+  ctx.font = "bold 26px sans-serif";
+  ctx.fillText(String(Math.max(0, Math.ceil(secondsLeft))) + "s", 24, 108);
+}
+
+function drawFnafJumpscare(image, timer) {
+  ctx.fillStyle = "#050508";
+  ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+  if (timer < 0.12 || (timer > 0.35 && timer < 0.42)) {
+    ctx.fillStyle = "rgba(200,0,0,0.75)";
+    ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+  }
+  if (timer < 0.08) {
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+  }
+
+  const shake = 28 + timer * 6;
+  const shakeX = (Math.random() - 0.5) * shake;
+  const shakeY = (Math.random() - 0.5) * shake;
+  const pulse = 1.05 + Math.sin(timer * 38) * 0.12 + timer * 0.08;
+  const size = Math.min(620, 380 + timer * 140) * pulse;
+
+  if (image) {
+    drawThreatSprite(
+      ctx,
+      image,
+      SCREEN_WIDTH / 2 + shakeX,
+      SCREEN_HEIGHT / 2 + shakeY - 20,
+      size
+    );
+  }
+
+  drawCameraGlitchHeavy();
+  drawTitleStatic(55);
+
+  for (let i = 0; i < 35; i++) {
+    const alpha = (50 * (1 - i / 35)) / 255;
+    ctx.strokeStyle = `rgba(0,0,0,${alpha})`;
+    ctx.strokeRect(i, i, SCREEN_WIDTH - i * 2, SCREEN_HEIGHT - i * 2);
+  }
+}
+
 function drawCameraGlitch() {
   for (let i = 0; i < 50; i++) {
     const y = Math.floor(Math.random() * SCREEN_HEIGHT);
@@ -866,6 +950,11 @@ async function main() {
   let crabPull = null;
   let octoPull = null;
   let rayPull = null;
+  let hijackTimer = 0;
+  let hijackCamTimer = 0;
+  let hijackAnimal = null;
+  let jumpscareTimer = 0;
+  let gameOverReason = "oxygen";
 
   const openCamsButton = makeButton("CAMERAS", 780, 500, 180, 50);
   const closeCamsButton = makeButton("CLOSE CAMS", 800, 540, 170, 45);
@@ -904,6 +993,40 @@ async function main() {
     crabPull = null;
     octoPull = null;
     rayPull = null;
+    hijackTimer = 0;
+    hijackCamTimer = 0;
+    hijackAnimal = null;
+    jumpscareTimer = 0;
+    gameOverReason = "oxygen";
+  }
+
+  function threatImageFor(animal) {
+    if (animal === "turtle") return turtleThreatImage;
+    if (animal === "shark") return sharkThreatImage;
+    if (animal === "crab") return crabThreatImage;
+    if (animal === "octopus") return octopusThreatImage;
+    if (animal === "ray") return rayThreatImage;
+    return null;
+  }
+
+  function beginOfficeAttack(animal) {
+    if (mode !== "playing") return;
+    hijackAnimal = animal;
+    gameOverReason = animal;
+    if (camerasOpen) {
+      mode = "camera_hijack";
+      hijackTimer = 0;
+      hijackCamTimer = 0;
+      currentCam = Math.floor(Math.random() * CAMERAS.length);
+    } else {
+      camerasOpen = false;
+      mode = "jumpscare";
+      jumpscareTimer = 0;
+    }
+  }
+
+  function checkOfficeEntry(animal, oldRoom, newRoom) {
+    if (threatEntersOffice(oldRoom, newRoom)) beginOfficeAttack(animal);
   }
 
   // tip: open http://.../?room=Cafe to jump straight to that camera
@@ -952,6 +1075,7 @@ async function main() {
           if (target !== null) {
             // each animal may ignore this sound on its own
             if (Math.random() >= SOUND_IGNORE_CHANCE) {
+              const oldTurtle = turtleRoom;
               const turtleResult = tryLureThreat(
                 turtleRoom,
                 turtlePull,
@@ -961,11 +1085,13 @@ async function main() {
               );
               turtleRoom = turtleResult.room;
               turtlePull = turtleResult.pull;
+              checkOfficeEntry("turtle", oldTurtle, turtleRoom);
               if (turtleResult.reacted) anyoneReacted = true;
             }
 
             if (Math.random() >= SOUND_IGNORE_CHANCE) {
               const sharkBlocked = drainClosed ? ["Office"] : [];
+              const oldShark = sharkRoom;
               const sharkResult = tryLureThreat(
                 sharkRoom,
                 sharkPull,
@@ -975,10 +1101,12 @@ async function main() {
               );
               sharkRoom = sharkResult.room;
               sharkPull = sharkResult.pull;
+              checkOfficeEntry("shark", oldShark, sharkRoom);
               if (sharkResult.reacted) anyoneReacted = true;
             }
 
             if (Math.random() >= SOUND_IGNORE_CHANCE) {
+              const oldCrab = crabRoom;
               const crabResult = tryLureThreat(
                 crabRoom,
                 crabPull,
@@ -988,11 +1116,13 @@ async function main() {
               );
               crabRoom = crabResult.room;
               crabPull = crabResult.pull;
+              checkOfficeEntry("crab", oldCrab, crabRoom);
               if (crabResult.reacted) anyoneReacted = true;
             }
 
             if (Math.random() >= SOUND_IGNORE_CHANCE) {
               const octoBlocked = drainClosed ? ["Office"] : [];
+              const oldOcto = octoRoom;
               const octoResult = tryLureThreat(
                 octoRoom,
                 octoPull,
@@ -1002,11 +1132,13 @@ async function main() {
               );
               octoRoom = octoResult.room;
               octoPull = octoResult.pull;
+              checkOfficeEntry("octopus", oldOcto, octoRoom);
               if (octoResult.reacted) anyoneReacted = true;
             }
 
             if (Math.random() >= SOUND_IGNORE_CHANCE) {
               const rayBlocked = drainClosed ? ["Office"] : [];
+              const oldRay = rayRoom;
               const rayResult = tryLureThreat(
                 rayRoom,
                 rayPull,
@@ -1016,6 +1148,7 @@ async function main() {
               );
               rayRoom = rayResult.room;
               rayPull = rayResult.pull;
+              checkOfficeEntry("ray", oldRay, rayRoom);
               if (rayResult.reacted) anyoneReacted = true;
             }
 
@@ -1070,7 +1203,10 @@ async function main() {
       if (drainClosed) oxygen -= 3 * dt;
       else oxygen += 8 * dt;
       oxygen = Math.max(0, Math.min(100, oxygen));
-      if (oxygen <= 0) mode = "game_over";
+      if (oxygen <= 0) {
+        gameOverReason = "oxygen";
+        mode = "game_over";
+      }
 
       if (glitchTimer > 0) glitchTimer -= dt;
       if (soundCooldown > 0) soundCooldown -= dt;
@@ -1078,23 +1214,38 @@ async function main() {
       if (soundIgnoredFlash > 0) soundIgnoredFlash -= dt;
 
       // slow crawl continues even if you wait
+      const oldTurtleRoom = turtleRoom;
       const turtlePullUpdate = updatePull(turtleRoom, turtlePull, dt);
       turtleRoom = turtlePullUpdate.room;
       turtlePull = turtlePullUpdate.pull;
+      checkOfficeEntry("turtle", oldTurtleRoom, turtleRoom);
+
+      const oldSharkRoom = sharkRoom;
       const sharkPullUpdate = updatePull(sharkRoom, sharkPull, dt);
       sharkRoom = sharkPullUpdate.room;
       sharkPull = sharkPullUpdate.pull;
+      checkOfficeEntry("shark", oldSharkRoom, sharkRoom);
+
+      const oldCrabRoom = crabRoom;
       const crabPullUpdate = updatePull(crabRoom, crabPull, dt);
       crabRoom = crabPullUpdate.room;
       crabPull = crabPullUpdate.pull;
+      checkOfficeEntry("crab", oldCrabRoom, crabRoom);
+
+      const oldOctoRoom = octoRoom;
       const octoPullUpdate = updatePull(octoRoom, octoPull, dt);
       octoRoom = octoPullUpdate.room;
       octoPull = octoPullUpdate.pull;
+      checkOfficeEntry("octopus", oldOctoRoom, octoRoom);
+
+      const oldRayRoom = rayRoom;
       const rayPullUpdate = updatePull(rayRoom, rayPull, dt);
       rayRoom = rayPullUpdate.room;
       rayPull = rayPullUpdate.pull;
+      checkOfficeEntry("ray", oldRayRoom, rayRoom);
 
-      turtleTimer += dt;
+      if (mode === "playing") {
+        turtleTimer += dt;
       if (turtleTimer >= TURTLE_MOVE_TIME) {
         turtleTimer = 0;
         // don't wander off while being dragged by sound
@@ -1102,6 +1253,7 @@ async function main() {
           const oldRoom = turtleRoom;
           turtleRoom = moveThreat(turtleRoom, LAND_NEIGHBORS);
           if (turtleRoom !== oldRoom) glitchTimer = GLITCH_TIME;
+          checkOfficeEntry("turtle", oldRoom, turtleRoom);
         }
       }
 
@@ -1112,6 +1264,7 @@ async function main() {
           const oldRoom = sharkRoom;
           sharkRoom = moveShark(sharkRoom, drainClosed);
           if (sharkRoom !== oldRoom) glitchTimer = GLITCH_TIME;
+          checkOfficeEntry("shark", oldRoom, sharkRoom);
         }
       }
 
@@ -1122,6 +1275,7 @@ async function main() {
           const oldRoom = crabRoom;
           crabRoom = moveThreat(crabRoom, LAND_NEIGHBORS);
           if (crabRoom !== oldRoom) glitchTimer = GLITCH_TIME;
+          checkOfficeEntry("crab", oldRoom, crabRoom);
         }
       }
 
@@ -1132,6 +1286,7 @@ async function main() {
           const oldRoom = octoRoom;
           octoRoom = moveOctopus(octoRoom, drainClosed);
           if (octoRoom !== oldRoom) glitchTimer = GLITCH_TIME;
+          checkOfficeEntry("octopus", oldRoom, octoRoom);
         }
       }
 
@@ -1142,8 +1297,37 @@ async function main() {
           const oldRoom = rayRoom;
           rayRoom = moveShark(rayRoom, drainClosed);
           if (rayRoom !== oldRoom) glitchTimer = GLITCH_TIME;
+          checkOfficeEntry("ray", oldRoom, rayRoom);
         }
       }
+      }
+    }
+
+    if (mode === "camera_hijack") {
+      hijackTimer += dt;
+      hijackCamTimer -= dt;
+      if (hijackCamTimer <= 0) {
+        let nextCam = Math.floor(Math.random() * CAMERAS.length);
+        if (nextCam === currentCam) nextCam = (nextCam + 1) % CAMERAS.length;
+        currentCam = nextCam;
+        hijackCamTimer =
+          HIJACK_CAM_SWITCH_MIN +
+          Math.random() * (HIJACK_CAM_SWITCH_MAX - HIJACK_CAM_SWITCH_MIN);
+        glitchTimer = GLITCH_TIME * 2;
+      }
+      glitchTimer = Math.max(glitchTimer, 0.25);
+      if (glitchTimer > 0) glitchTimer -= dt;
+
+      if (hijackTimer >= CAMERA_HIJACK_SECONDS) {
+        camerasOpen = false;
+        mode = "jumpscare";
+        jumpscareTimer = 0;
+      }
+    }
+
+    if (mode === "jumpscare") {
+      jumpscareTimer += dt;
+      if (jumpscareTimer >= JUMPSCARE_SECONDS) mode = "game_over";
     }
 
     drainButton.text = drainClosed ? "OPEN DRAIN" : "CLOSE DRAIN";
@@ -1178,7 +1362,15 @@ async function main() {
       ctx.textAlign = "center";
       ctx.fillStyle = "rgb(230,240,255)";
       ctx.font = "bold 36px sans-serif";
-      ctx.fillText("You Ran Out Of Air.", SCREEN_WIDTH / 2, 230);
+      if (gameOverReason === "oxygen") {
+        ctx.fillText("You Ran Out Of Air.", SCREEN_WIDTH / 2, 230);
+      } else {
+        ctx.fillText(
+          JUMPSCARE_MESSAGES[gameOverReason] || "Something got you!",
+          SCREEN_WIDTH / 2,
+          230
+        );
+      }
       ctx.fillStyle = "rgb(220,80,80)";
       ctx.fillText("GAME OVER", SCREEN_WIDTH / 2, 280);
       ctx.fillStyle = "rgb(160,180,190)";
@@ -1200,6 +1392,19 @@ async function main() {
       ctx.fillText("Click PLAY AGAIN to start over.", SCREEN_WIDTH / 2, 320);
       ctx.textAlign = "left";
       drawButton(playAgainButton, { selected: true });
+    } else if (mode === "camera_hijack") {
+      drawDarkImage(ctx, cameraImages[currentCam], 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+      drawCameraGlitchHeavy();
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.fillRect(20, 130, 380, 44);
+      ctx.fillStyle = "rgb(255,200,150)";
+      ctx.font = "bold 28px sans-serif";
+      const camJitter = Math.floor(Math.random() * 5) - 2;
+      ctx.fillText(CAMERAS[currentCam][0], 30 + camJitter, 160);
+      drawCameraHijackWarning(CAMERA_HIJACK_SECONDS - hijackTimer);
+      drawClock(nightHours, 20, 45);
+    } else if (mode === "jumpscare") {
+      drawFnafJumpscare(threatImageFor(hijackAnimal), jumpscareTimer);
     } else if (mode === "playing" && camerasOpen) {
       drawDarkImage(ctx, cameraImages[currentCam], 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
