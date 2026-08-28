@@ -8,6 +8,9 @@ const SCREEN_HEIGHT = 600;
 
 const TURTLE_MOVE_TIME = 20.0;
 const SHARK_MOVE_TIME = 20.0;
+const CRAB_MOVE_TIME = 14.0;
+const OCTOPUS_MOVE_TIME = 16.0;
+const RAY_MOVE_TIME = 12.0;
 const SECONDS_PER_HOUR = 20.0;
 const GLITCH_TIME = 0.5;
 const SOUND_COOLDOWN = 3.5;
@@ -147,7 +150,7 @@ function loadImage(src) {
     img.onload = () => resolve(img);
     img.onerror = reject;
     // cache-bust so new room art shows after refresh
-    img.src = src + (src.includes("?") ? "&" : "?") + "v=shark2";
+    img.src = src + (src.includes("?") ? "&" : "?") + "v=ray1";
   });
 }
 
@@ -158,8 +161,8 @@ function drawDarkImage(targetCtx, image, x, y, width, height) {
   targetCtx.fillRect(x, y, width, height);
 }
 
-/** Draw the scary shark sprite centered on x,y. */
-function drawSharkSprite(targetCtx, image, centerX, centerY, width) {
+/** Draw a threat sprite centered on x,y. */
+function drawThreatSprite(targetCtx, image, centerX, centerY, width) {
   const height = width * (image.height / image.width);
   targetCtx.drawImage(
     image,
@@ -168,6 +171,11 @@ function drawSharkSprite(targetCtx, image, centerX, centerY, width) {
     width,
     height
   );
+}
+
+/** Draw the scary shark sprite centered on x,y. */
+function drawSharkSprite(targetCtx, image, centerX, centerY, width) {
+  drawThreatSprite(targetCtx, image, centerX, centerY, width);
 }
 
 function makeButton(text, x, y, width, height) {
@@ -231,6 +239,21 @@ function buildNeighbors(links) {
 const LAND_NEIGHBORS = buildNeighbors(MAP_LINKS);
 const DRAIN_NEIGHBORS = buildNeighbors(DRAIN_LINKS);
 
+/** Octopus can sneak on doors AND drains. */
+function mergeNeighbors(land, drain) {
+  const merged = {};
+  const keys = new Set([...Object.keys(land), ...Object.keys(drain)]);
+  for (const key of keys) {
+    merged[key] = [...(land[key] || [])];
+    for (const n of drain[key] || []) {
+      if (!merged[key].includes(n)) merged[key].push(n);
+    }
+  }
+  return merged;
+}
+
+const OCTO_NEIGHBORS = mergeNeighbors(LAND_NEIGHBORS, DRAIN_NEIGHBORS);
+
 function findRoom(name) {
   return MAP_ROOMS.find((room) => room[0] === name) || null;
 }
@@ -275,6 +298,16 @@ function moveShark(sharkRoom, drainClosed) {
     if (i >= 0) choices.splice(i, 1);
   }
   choices.push(sharkRoom);
+  return choices[Math.floor(Math.random() * choices.length)];
+}
+
+function moveOctopus(octoRoom, drainClosed) {
+  const choices = (OCTO_NEIGHBORS[octoRoom] || []).slice();
+  if (drainClosed) {
+    const i = choices.indexOf("Office");
+    if (i >= 0) choices.splice(i, 1);
+  }
+  choices.push(octoRoom);
   return choices[Math.floor(Math.random() * choices.length)];
 }
 
@@ -616,7 +649,17 @@ function drawTitleScreen(titleBg, titleTimer) {
   ctx.fillText("Survive until 6 AM", 80, 555);
 }
 
-function drawMap(mapRect, currentCam, sharkRoom, showDrains, sharkPull, sharkImage) {
+function drawMap(
+  mapRect,
+  currentCam,
+  sharkRoom,
+  showDrains,
+  sharkPull,
+  sharkImage,
+  rayRoom,
+  rayPull,
+  rayImage,
+) {
   ctx.save();
   ctx.translate(mapRect.x, mapRect.y);
 
@@ -675,6 +718,34 @@ function drawMap(mapRect, currentCam, sharkRoom, showDrains, sharkPull, sharkIma
       ctx.fillStyle = "rgba(60,140,220,0.9)";
       ctx.beginPath();
       ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  const ray = findRoom(rayRoom);
+  if (ray) {
+    let cx;
+    let cy;
+    if (rayPull) {
+      const fromRoom = findRoom(rayPull.from);
+      const toRoom = findRoom(rayPull.to);
+      if (fromRoom && toRoom) {
+        const [fx, fy] = roomCenter(fromRoom);
+        const [tx, ty] = roomCenter(toRoom);
+        cx = lerp(fx, tx, rayPull.progress);
+        cy = lerp(fy, ty, rayPull.progress);
+      } else {
+        [cx, cy] = roomCenter(ray);
+      }
+    } else {
+      [cx, cy] = roomCenter(ray);
+    }
+    if (rayImage) {
+      drawThreatSprite(ctx, rayImage, cx, cy, 26);
+    } else {
+      ctx.fillStyle = "rgba(180,120,220,0.9)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, 9, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -754,6 +825,10 @@ async function main() {
   const titleBg = await loadImage("images/lobby.png");
   const officeImage = await loadImage("images/office.png");
   const sharkThreatImage = await loadImage("images/shark_threat.png");
+  const turtleThreatImage = await loadImage("images/turtle_threat.png");
+  const crabThreatImage = await loadImage("images/crab_threat.png");
+  const octopusThreatImage = await loadImage("images/octopus_threat.png");
+  const rayThreatImage = await loadImage("images/ray_threat.png");
   const cameraImages = [];
   for (const [, filename] of CAMERAS) {
     cameraImages.push(await loadImage("images/" + filename));
@@ -773,6 +848,12 @@ async function main() {
   let turtleTimer = 0;
   let sharkRoom = "Shark";
   let sharkTimer = 0;
+  let crabRoom = "Tide";
+  let crabTimer = 0;
+  let octoRoom = "Jelly";
+  let octoTimer = 0;
+  let rayRoom = "Ray";
+  let rayTimer = 0;
   let showDrainMap = false;
   let nightHours = 0;
   let glitchTimer = 0;
@@ -782,6 +863,9 @@ async function main() {
   // slow crawl into a next-door camera room (null when not dragging)
   let turtlePull = null;
   let sharkPull = null;
+  let crabPull = null;
+  let octoPull = null;
+  let rayPull = null;
 
   const openCamsButton = makeButton("CAMERAS", 780, 500, 180, 50);
   const closeCamsButton = makeButton("CLOSE CAMS", 800, 540, 170, 45);
@@ -803,6 +887,12 @@ async function main() {
     turtleTimer = 0;
     sharkRoom = "Shark";
     sharkTimer = 0;
+    crabRoom = "Tide";
+    crabTimer = 0;
+    octoRoom = "Jelly";
+    octoTimer = 0;
+    rayRoom = "Ray";
+    rayTimer = 0;
     showDrainMap = false;
     nightHours = 0;
     glitchTimer = 0;
@@ -811,6 +901,9 @@ async function main() {
     soundIgnoredFlash = 0;
     turtlePull = null;
     sharkPull = null;
+    crabPull = null;
+    octoPull = null;
+    rayPull = null;
   }
 
   // tip: open http://.../?room=Cafe to jump straight to that camera
@@ -885,6 +978,47 @@ async function main() {
               if (sharkResult.reacted) anyoneReacted = true;
             }
 
+            if (Math.random() >= SOUND_IGNORE_CHANCE) {
+              const crabResult = tryLureThreat(
+                crabRoom,
+                crabPull,
+                target,
+                LAND_NEIGHBORS,
+                []
+              );
+              crabRoom = crabResult.room;
+              crabPull = crabResult.pull;
+              if (crabResult.reacted) anyoneReacted = true;
+            }
+
+            if (Math.random() >= SOUND_IGNORE_CHANCE) {
+              const octoBlocked = drainClosed ? ["Office"] : [];
+              const octoResult = tryLureThreat(
+                octoRoom,
+                octoPull,
+                target,
+                OCTO_NEIGHBORS,
+                octoBlocked
+              );
+              octoRoom = octoResult.room;
+              octoPull = octoResult.pull;
+              if (octoResult.reacted) anyoneReacted = true;
+            }
+
+            if (Math.random() >= SOUND_IGNORE_CHANCE) {
+              const rayBlocked = drainClosed ? ["Office"] : [];
+              const rayResult = tryLureThreat(
+                rayRoom,
+                rayPull,
+                target,
+                DRAIN_NEIGHBORS,
+                rayBlocked
+              );
+              rayRoom = rayResult.room;
+              rayPull = rayResult.pull;
+              if (rayResult.reacted) anyoneReacted = true;
+            }
+
             if (anyoneReacted) {
               glitchTimer = GLITCH_TIME;
               soundFlash = 0.8;
@@ -950,6 +1084,15 @@ async function main() {
       const sharkPullUpdate = updatePull(sharkRoom, sharkPull, dt);
       sharkRoom = sharkPullUpdate.room;
       sharkPull = sharkPullUpdate.pull;
+      const crabPullUpdate = updatePull(crabRoom, crabPull, dt);
+      crabRoom = crabPullUpdate.room;
+      crabPull = crabPullUpdate.pull;
+      const octoPullUpdate = updatePull(octoRoom, octoPull, dt);
+      octoRoom = octoPullUpdate.room;
+      octoPull = octoPullUpdate.pull;
+      const rayPullUpdate = updatePull(rayRoom, rayPull, dt);
+      rayRoom = rayPullUpdate.room;
+      rayPull = rayPullUpdate.pull;
 
       turtleTimer += dt;
       if (turtleTimer >= TURTLE_MOVE_TIME) {
@@ -969,6 +1112,36 @@ async function main() {
           const oldRoom = sharkRoom;
           sharkRoom = moveShark(sharkRoom, drainClosed);
           if (sharkRoom !== oldRoom) glitchTimer = GLITCH_TIME;
+        }
+      }
+
+      crabTimer += dt;
+      if (crabTimer >= CRAB_MOVE_TIME) {
+        crabTimer = 0;
+        if (!crabPull) {
+          const oldRoom = crabRoom;
+          crabRoom = moveThreat(crabRoom, LAND_NEIGHBORS);
+          if (crabRoom !== oldRoom) glitchTimer = GLITCH_TIME;
+        }
+      }
+
+      octoTimer += dt;
+      if (octoTimer >= OCTOPUS_MOVE_TIME) {
+        octoTimer = 0;
+        if (!octoPull) {
+          const oldRoom = octoRoom;
+          octoRoom = moveOctopus(octoRoom, drainClosed);
+          if (octoRoom !== oldRoom) glitchTimer = GLITCH_TIME;
+        }
+      }
+
+      rayTimer += dt;
+      if (rayTimer >= RAY_MOVE_TIME) {
+        rayTimer = 0;
+        if (!rayPull) {
+          const oldRoom = rayRoom;
+          rayRoom = moveShark(rayRoom, drainClosed);
+          if (rayRoom !== oldRoom) glitchTimer = GLITCH_TIME;
         }
       }
     }
@@ -1046,21 +1219,21 @@ async function main() {
           const t = turtlePull.progress;
           let x;
           if (turtlePull.to === camRoom) {
-            x = lerp(80, SCREEN_WIDTH / 2 - 50, t);
+            x = lerp(80, SCREEN_WIDTH / 2 - 140, t);
           } else {
-            x = lerp(SCREEN_WIDTH / 2 - 50, SCREEN_WIDTH - 80, t);
+            x = lerp(SCREEN_WIDTH / 2 - 140, SCREEN_WIDTH - 80, t);
           }
-          ctx.fillStyle = "rgb(80,200,90)";
-          ctx.beginPath();
-          ctx.arc(x, SCREEN_HEIGHT / 2, 40, 0, Math.PI * 2);
-          ctx.fill();
+          drawThreatSprite(ctx, turtleThreatImage, x, SCREEN_HEIGHT / 2, 160);
         } else {
           const turtleData = findRoom(turtleRoom);
           if (turtleData && turtleData[1] === currentCam) {
-            ctx.fillStyle = "rgb(80,200,90)";
-            ctx.beginPath();
-            ctx.arc(SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT / 2, 40, 0, Math.PI * 2);
-            ctx.fill();
+            drawThreatSprite(
+              ctx,
+              turtleThreatImage,
+              SCREEN_WIDTH / 2 - 140,
+              SCREEN_HEIGHT / 2,
+              160
+            );
           }
         }
 
@@ -1068,26 +1241,102 @@ async function main() {
           const t = sharkPull.progress;
           let x;
           if (sharkPull.to === camRoom) {
-            x = lerp(SCREEN_WIDTH - 80, SCREEN_WIDTH / 2 + 50, t);
+            x = lerp(SCREEN_WIDTH - 80, SCREEN_WIDTH / 2 + 140, t);
           } else {
-            x = lerp(SCREEN_WIDTH / 2 + 50, 80, t);
+            x = lerp(SCREEN_WIDTH / 2 + 140, 80, t);
           }
-          drawSharkSprite(ctx, sharkThreatImage, x, SCREEN_HEIGHT / 2, 170);
+          drawSharkSprite(ctx, sharkThreatImage, x, SCREEN_HEIGHT / 2, 160);
         } else {
           const sharkData = findRoom(sharkRoom);
           if (sharkData && sharkData[1] === currentCam) {
             drawSharkSprite(
               ctx,
               sharkThreatImage,
-              SCREEN_WIDTH / 2 + 50,
+              SCREEN_WIDTH / 2 + 140,
               SCREEN_HEIGHT / 2,
-              170
+              160
+            );
+          }
+        }
+
+        if (crabPull && (crabPull.to === camRoom || crabPull.from === camRoom)) {
+          const t = crabPull.progress;
+          let y;
+          if (crabPull.to === camRoom) {
+            y = lerp(SCREEN_HEIGHT - 60, SCREEN_HEIGHT / 2 + 70, t);
+          } else {
+            y = lerp(SCREEN_HEIGHT / 2 + 70, SCREEN_HEIGHT - 40, t);
+          }
+          drawThreatSprite(ctx, crabThreatImage, SCREEN_WIDTH / 2, y, 150);
+        } else {
+          const crabData = findRoom(crabRoom);
+          if (crabData && crabData[1] === currentCam) {
+            drawThreatSprite(
+              ctx,
+              crabThreatImage,
+              SCREEN_WIDTH / 2,
+              SCREEN_HEIGHT / 2 + 70,
+              150
+            );
+          }
+        }
+
+        if (octoPull && (octoPull.to === camRoom || octoPull.from === camRoom)) {
+          const t = octoPull.progress;
+          let y;
+          if (octoPull.to === camRoom) {
+            y = lerp(60, SCREEN_HEIGHT / 2 - 90, t);
+          } else {
+            y = lerp(SCREEN_HEIGHT / 2 - 90, 40, t);
+          }
+          drawThreatSprite(ctx, octopusThreatImage, SCREEN_WIDTH / 2, y, 150);
+        } else {
+          const octoData = findRoom(octoRoom);
+          if (octoData && octoData[1] === currentCam) {
+            drawThreatSprite(
+              ctx,
+              octopusThreatImage,
+              SCREEN_WIDTH / 2,
+              SCREEN_HEIGHT / 2 - 90,
+              150
+            );
+          }
+        }
+
+        if (rayPull && (rayPull.to === camRoom || rayPull.from === camRoom)) {
+          const t = rayPull.progress;
+          let x;
+          if (rayPull.to === camRoom) {
+            x = lerp(SCREEN_WIDTH - 100, SCREEN_WIDTH / 2 + 20, t);
+          } else {
+            x = lerp(SCREEN_WIDTH / 2 + 20, 100, t);
+          }
+          drawThreatSprite(ctx, rayThreatImage, x, SCREEN_HEIGHT / 2 + 50, 140);
+        } else {
+          const rayData = findRoom(rayRoom);
+          if (rayData && rayData[1] === currentCam) {
+            drawThreatSprite(
+              ctx,
+              rayThreatImage,
+              SCREEN_WIDTH / 2 + 20,
+              SCREEN_HEIGHT / 2 + 50,
+              140
             );
           }
         }
       }
 
-      drawMap(mapRect, currentCam, sharkRoom, showDrainMap, sharkPull, sharkThreatImage);
+      drawMap(
+        mapRect,
+        currentCam,
+        sharkRoom,
+        showDrainMap,
+        sharkPull,
+        sharkThreatImage,
+        rayRoom,
+        rayPull,
+        rayThreatImage,
+      );
       drawButton(mapModeButton, { selected: showDrainMap, transparent: true });
       drawButton(soundButton, {
         selected: soundFlash > 0,
@@ -1113,13 +1362,19 @@ async function main() {
       drawClock(nightHours, 850, 45);
 
       if (turtleRoom === "Office") {
-        ctx.fillStyle = "rgb(80,200,90)";
-        ctx.beginPath();
-        ctx.arc(430, 240, 50, 0, Math.PI * 2);
-        ctx.fill();
+        drawThreatSprite(ctx, turtleThreatImage, 430, 240, 200);
       }
       if (sharkRoom === "Office") {
-        drawSharkSprite(ctx, sharkThreatImage, 560, 240, 200);
+        drawSharkSprite(ctx, sharkThreatImage, 560, 240, 180);
+      }
+      if (crabRoom === "Office") {
+        drawThreatSprite(ctx, crabThreatImage, 495, 300, 160);
+      }
+      if (octoRoom === "Office") {
+        drawThreatSprite(ctx, octopusThreatImage, 500, 180, 160);
+      }
+      if (rayRoom === "Office") {
+        drawThreatSprite(ctx, rayThreatImage, 620, 260, 150);
       }
 
       ctx.fillStyle = "rgb(160,180,190)";
