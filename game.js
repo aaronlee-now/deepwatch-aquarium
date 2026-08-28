@@ -147,7 +147,7 @@ function loadImage(src) {
     img.onload = () => resolve(img);
     img.onerror = reject;
     // cache-bust so new room art shows after refresh
-    img.src = src + (src.includes("?") ? "&" : "?") + "v=storage1";
+    img.src = src + (src.includes("?") ? "&" : "?") + "v=storage2";
   });
 }
 
