@@ -147,7 +147,7 @@ function loadImage(src) {
     img.onload = () => resolve(img);
     img.onerror = reject;
     // cache-bust so new room art shows after refresh
-    img.src = src + (src.includes("?") ? "&" : "?") + "v=storage2";
+    img.src = src + (src.includes("?") ? "&" : "?") + "v=shark2";
   });
 }
 
@@ -156,6 +156,18 @@ function drawDarkImage(targetCtx, image, x, y, width, height) {
   targetCtx.drawImage(image, x, y, width, height);
   targetCtx.fillStyle = "rgba(0, 0, 0, 0.08)";
   targetCtx.fillRect(x, y, width, height);
+}
+
+/** Draw the scary shark sprite centered on x,y. */
+function drawSharkSprite(targetCtx, image, centerX, centerY, width) {
+  const height = width * (image.height / image.width);
+  targetCtx.drawImage(
+    image,
+    centerX - width / 2,
+    centerY - height / 2,
+    width,
+    height
+  );
 }
 
 function makeButton(text, x, y, width, height) {
@@ -604,7 +616,7 @@ function drawTitleScreen(titleBg, titleTimer) {
   ctx.fillText("Survive until 6 AM", 80, 555);
 }
 
-function drawMap(mapRect, currentCam, sharkRoom, showDrains, sharkPull) {
+function drawMap(mapRect, currentCam, sharkRoom, showDrains, sharkPull, sharkImage) {
   ctx.save();
   ctx.translate(mapRect.x, mapRect.y);
 
@@ -657,10 +669,14 @@ function drawMap(mapRect, currentCam, sharkRoom, showDrains, sharkPull) {
     } else {
       [cx, cy] = roomCenter(shark);
     }
-    ctx.fillStyle = "rgba(60,140,220,0.9)";
-    ctx.beginPath();
-    ctx.arc(cx, cy, 10, 0, Math.PI * 2);
-    ctx.fill();
+    if (sharkImage) {
+      drawSharkSprite(ctx, sharkImage, cx, cy, 28);
+    } else {
+      ctx.fillStyle = "rgba(60,140,220,0.9)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   ctx.fillStyle = "rgb(255,255,255)";
@@ -737,6 +753,7 @@ function canvasMousePos(event) {
 async function main() {
   const titleBg = await loadImage("images/lobby.png");
   const officeImage = await loadImage("images/office.png");
+  const sharkThreatImage = await loadImage("images/shark_threat.png");
   const cameraImages = [];
   for (const [, filename] of CAMERAS) {
     cameraImages.push(await loadImage("images/" + filename));
@@ -1055,22 +1072,22 @@ async function main() {
           } else {
             x = lerp(SCREEN_WIDTH / 2 + 50, 80, t);
           }
-          ctx.fillStyle = "rgb(60,140,220)";
-          ctx.beginPath();
-          ctx.arc(x, SCREEN_HEIGHT / 2, 40, 0, Math.PI * 2);
-          ctx.fill();
+          drawSharkSprite(ctx, sharkThreatImage, x, SCREEN_HEIGHT / 2, 170);
         } else {
           const sharkData = findRoom(sharkRoom);
           if (sharkData && sharkData[1] === currentCam) {
-            ctx.fillStyle = "rgb(60,140,220)";
-            ctx.beginPath();
-            ctx.arc(SCREEN_WIDTH / 2 + 50, SCREEN_HEIGHT / 2, 40, 0, Math.PI * 2);
-            ctx.fill();
+            drawSharkSprite(
+              ctx,
+              sharkThreatImage,
+              SCREEN_WIDTH / 2 + 50,
+              SCREEN_HEIGHT / 2,
+              170
+            );
           }
         }
       }
 
-      drawMap(mapRect, currentCam, sharkRoom, showDrainMap, sharkPull);
+      drawMap(mapRect, currentCam, sharkRoom, showDrainMap, sharkPull, sharkThreatImage);
       drawButton(mapModeButton, { selected: showDrainMap, transparent: true });
       drawButton(soundButton, {
         selected: soundFlash > 0,
@@ -1102,10 +1119,7 @@ async function main() {
         ctx.fill();
       }
       if (sharkRoom === "Office") {
-        ctx.fillStyle = "rgb(60,140,220)";
-        ctx.beginPath();
-        ctx.arc(560, 240, 50, 0, Math.PI * 2);
-        ctx.fill();
+        drawSharkSprite(ctx, sharkThreatImage, 560, 240, 200);
       }
 
       ctx.fillStyle = "rgb(160,180,190)";
