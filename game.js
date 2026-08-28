@@ -6,6 +6,9 @@
 const SCREEN_WIDTH = 1000;
 const SCREEN_HEIGHT = 600;
 
+// bump this when you ship an update (matches game.js?v= in index.html)
+const GAME_VERSION = 13;
+
 const TURTLE_MOVE_TIME = 20.0;
 const SHARK_MOVE_TIME = 20.0;
 const CRAB_MOVE_TIME = 14.0;
@@ -731,6 +734,12 @@ function drawTitleScreen(titleBg, titleTimer) {
   ctx.fillStyle = "rgb(120,120,120)";
   ctx.font = "16px sans-serif";
   ctx.fillText("Survive until 6 AM", 80, 555);
+
+  ctx.fillStyle = "rgb(90,90,90)";
+  ctx.font = "14px sans-serif";
+  ctx.textAlign = "right";
+  ctx.fillText("v" + GAME_VERSION, SCREEN_WIDTH - 24, SCREEN_HEIGHT - 20);
+  ctx.textAlign = "left";
 }
 
 function drawMap(
