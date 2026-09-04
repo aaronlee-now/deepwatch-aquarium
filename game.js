@@ -7,7 +7,7 @@ const SCREEN_WIDTH = 1000;
 const SCREEN_HEIGHT = 600;
 
 // bump this when you ship an update (matches game.js?v= in index.html)
-const GAME_VERSION = 13;
+const GAME_VERSION = 17;
 
 const TURTLE_MOVE_TIME = 20.0;
 const SHARK_MOVE_TIME = 20.0;
@@ -25,10 +25,9 @@ const SOUND_PULL_BOOST = 0.3;
 const NEWSPAPER_SECONDS = 3.0;
 const TWELVE_AM_SECONDS = 2.0;
 // threat in office while you're on cams — animals mess with the controls
-const CAMERA_HIJACK_SECONDS = 15.0;
-const HIJACK_CAM_SWITCH_MIN = 0.18;
-const HIJACK_CAM_SWITCH_MAX = 0.5;
-const JUMPSCARE_SECONDS = 2.8;
+const CAMERA_HIJACK_SECONDS = 20.0;
+const HIJACK_CAM_SWITCH_SECONDS = 3.0;
+const JUMPSCARE_SECONDS = 2.2;
 const NEWSPAPER_TILT = -5;
 const PAPER_GRAY = [228, 226, 220];
 
@@ -598,56 +597,147 @@ function drawCameraGlitchHeavy() {
   }
 }
 
-function drawCameraHijackWarning(secondsLeft) {
-  ctx.fillStyle = "rgba(0,0,0,0.5)";
-  ctx.fillRect(0, 0, SCREEN_WIDTH, 120);
-  ctx.fillStyle = "rgb(255,70,70)";
-  ctx.font = "bold 34px sans-serif";
-  const jitter = Math.floor(Math.random() * 5) - 2;
-  ctx.fillText("!! CAMERAS HIJACKED !!", 24 + jitter, 42);
-  ctx.fillStyle = "rgb(255,220,180)";
-  ctx.font = "22px sans-serif";
-  ctx.fillText("Something is messing with the controls...", 24, 78);
-  ctx.fillStyle = "rgb(200,160,140)";
-  ctx.font = "bold 26px sans-serif";
-  ctx.fillText(String(Math.max(0, Math.ceil(secondsLeft))) + "s", 24, 108);
+function pickRandomCamera(excludeIndex) {
+  if (CAMERAS.length <= 1) return 0;
+  let next = Math.floor(Math.random() * CAMERAS.length);
+  while (next === excludeIndex) {
+    next = Math.floor(Math.random() * CAMERAS.length);
+  }
+  return next;
+}
+
+/** Loud FNaF-style scream using Web Audio (no sound file needed). */
+function playJumpscareScream() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const audioCtx = new AudioCtx();
+
+    const now = audioCtx.currentTime;
+    const master = audioCtx.createGain();
+    master.gain.setValueAtTime(1.1, now);
+    master.gain.exponentialRampToValueAtTime(0.01, now + 0.65);
+    master.connect(audioCtx.destination);
+
+    // harsh noise burst
+    const noiseLen = Math.floor(audioCtx.sampleRate * 0.45);
+    const noiseBuf = audioCtx.createBuffer(1, noiseLen, audioCtx.sampleRate);
+    const noiseData = noiseBuf.getChannelData(0);
+    for (let i = 0; i < noiseLen; i++) {
+      const fade = 1 - i / noiseLen;
+      noiseData[i] = (Math.random() * 2 - 1) * fade * fade;
+    }
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = noiseBuf;
+    const noiseFilter = audioCtx.createBiquadFilter();
+    noiseFilter.type = "highpass";
+    noiseFilter.frequency.setValueAtTime(900, now);
+    const noiseGain = audioCtx.createGain();
+    noiseGain.gain.setValueAtTime(0.55, now);
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(master);
+    noise.start(now);
+
+    // screaming saw tone dropping fast
+    const scream = audioCtx.createOscillator();
+    scream.type = "sawtooth";
+    scream.frequency.setValueAtTime(420, now);
+    scream.frequency.exponentialRampToValueAtTime(90, now + 0.35);
+    scream.frequency.exponentialRampToValueAtTime(55, now + 0.6);
+    const screamGain = audioCtx.createGain();
+    screamGain.gain.setValueAtTime(0.45, now);
+    screamGain.gain.exponentialRampToValueAtTime(0.01, now + 0.62);
+    scream.connect(screamGain);
+    screamGain.connect(master);
+    scream.start(now);
+    scream.stop(now + 0.65);
+
+    // low thud impact
+    const thud = audioCtx.createOscillator();
+    thud.type = "square";
+    thud.frequency.setValueAtTime(110, now);
+    thud.frequency.exponentialRampToValueAtTime(40, now + 0.2);
+    const thudGain = audioCtx.createGain();
+    thudGain.gain.setValueAtTime(0.7, now);
+    thudGain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+    thud.connect(thudGain);
+    thudGain.connect(master);
+    thud.start(now);
+    thud.stop(now + 0.3);
+  } catch (err) {
+    // browser may block audio until user has clicked — ignore
+  }
 }
 
 function drawFnafJumpscare(image, timer) {
-  ctx.fillStyle = "#050508";
+  ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-  if (timer < 0.12 || (timer > 0.35 && timer < 0.42)) {
-    ctx.fillStyle = "rgba(200,0,0,0.75)";
-    ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-  }
-  if (timer < 0.08) {
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-  }
-
-  const shake = 28 + timer * 6;
-  const shakeX = (Math.random() - 0.5) * shake;
-  const shakeY = (Math.random() - 0.5) * shake;
-  const pulse = 1.05 + Math.sin(timer * 38) * 0.12 + timer * 0.08;
-  const size = Math.min(620, 380 + timer * 140) * pulse;
-
-  if (image) {
-    drawThreatSprite(
-      ctx,
-      image,
-      SCREEN_WIDTH / 2 + shakeX,
-      SCREEN_HEIGHT / 2 + shakeY - 20,
-      size
-    );
+  // rapid strobe — black / white / red like FNaF
+  if (timer < 0.5) {
+    const frame = Math.floor(timer * 32);
+    if (frame % 3 === 0) {
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    } else if (frame % 3 === 1 && timer < 0.14) {
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    } else if (timer < 0.22) {
+      ctx.fillStyle = "rgba(180,0,0,0.9)";
+      ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    }
   }
 
-  drawCameraGlitchHeavy();
-  drawTitleStatic(55);
+  const faceStart = 0.07;
+  if (timer >= faceStart && image) {
+    const faceTime = timer - faceStart;
+    const zoomT = Math.min(1, faceTime * 5.5);
+    const ease = 1 - Math.pow(1 - zoomT, 4);
+    const size = 280 + ease * 580;
 
-  for (let i = 0; i < 35; i++) {
-    const alpha = (50 * (1 - i / 35)) / 255;
+    let shakeX = 0;
+    let shakeY = 0;
+    if (faceTime < 0.5) {
+      const shakeAmt = 42 * (1 - faceTime / 0.5);
+      shakeX = (Math.random() - 0.5) * shakeAmt * 2.2;
+      shakeY = (Math.random() - 0.5) * shakeAmt * 2.2;
+    } else {
+      shakeX = (Math.random() - 0.5) * 10;
+      shakeY = (Math.random() - 0.5) * 10;
+    }
+
+    const slamPulse = faceTime < 0.18 ? 1 + Math.sin(faceTime * 55) * 0.08 : 1;
+    const drawSize = size * slamPulse;
+    const cx = SCREEN_WIDTH / 2 + shakeX;
+    const cy = SCREEN_HEIGHT / 2 + shakeY - 40;
+
+    // dark duplicate behind — face feels closer
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    drawThreatSprite(ctx, image, cx + 16, cy + 18, drawSize * 1.04);
+    ctx.restore();
+
+    drawThreatSprite(ctx, image, cx, cy, drawSize);
+
+    if (faceTime < 0.15) {
+      ctx.fillStyle = "rgba(255,30,30,0.35)";
+      ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    }
+  }
+
+  // pulsing red + black vignette — tunnel vision
+  const redPulse = 0.45 + Math.sin(timer * 14) * 0.2;
+  for (let i = 0; i < 45; i++) {
+    const alpha = (redPulse * 80 * (1 - i / 45)) / 255;
+    ctx.strokeStyle = `rgba(140,0,0,${alpha})`;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(i, i, SCREEN_WIDTH - i * 2, SCREEN_HEIGHT - i * 2);
+  }
+  for (let i = 0; i < 38; i++) {
+    const alpha = (95 * (1 - i / 38)) / 255;
     ctx.strokeStyle = `rgba(0,0,0,${alpha})`;
+    ctx.lineWidth = 2;
     ctx.strokeRect(i, i, SCREEN_WIDTH - i * 2, SCREEN_HEIGHT - i * 2);
   }
 }
@@ -963,6 +1053,7 @@ async function main() {
   let hijackCamTimer = 0;
   let hijackAnimal = null;
   let jumpscareTimer = 0;
+  let jumpscareNeedsSound = false;
   let gameOverReason = "oxygen";
 
   const openCamsButton = makeButton("CAMERAS", 780, 500, 180, 50);
@@ -1006,7 +1097,15 @@ async function main() {
     hijackCamTimer = 0;
     hijackAnimal = null;
     jumpscareTimer = 0;
+    jumpscareNeedsSound = false;
     gameOverReason = "oxygen";
+  }
+
+  function startJumpscare() {
+    camerasOpen = false;
+    mode = "jumpscare";
+    jumpscareTimer = 0;
+    jumpscareNeedsSound = true;
   }
 
   function threatImageFor(animal) {
@@ -1025,12 +1124,10 @@ async function main() {
     if (camerasOpen) {
       mode = "camera_hijack";
       hijackTimer = 0;
-      hijackCamTimer = 0;
-      currentCam = Math.floor(Math.random() * CAMERAS.length);
+      hijackCamTimer = HIJACK_CAM_SWITCH_SECONDS;
+      currentCam = pickRandomCamera(-1);
     } else {
-      camerasOpen = false;
-      mode = "jumpscare";
-      jumpscareTimer = 0;
+      startJumpscare();
     }
   }
 
@@ -1073,6 +1170,12 @@ async function main() {
     } else if (mode === "win") {
       if (pointInButton(playAgainButton, mx, my)) {
         mode = "instructions";
+      }
+    } else if (mode === "camera_hijack") {
+      const clicked = mapClickToCamera(mx, my, mapRect);
+      if (clicked !== null) {
+        currentCam = pickRandomCamera(clicked);
+        hijackCamTimer = HIJACK_CAM_SWITCH_SECONDS;
       }
     } else if (mode === "playing") {
       if (camerasOpen) {
@@ -1316,25 +1419,20 @@ async function main() {
       hijackTimer += dt;
       hijackCamTimer -= dt;
       if (hijackCamTimer <= 0) {
-        let nextCam = Math.floor(Math.random() * CAMERAS.length);
-        if (nextCam === currentCam) nextCam = (nextCam + 1) % CAMERAS.length;
-        currentCam = nextCam;
-        hijackCamTimer =
-          HIJACK_CAM_SWITCH_MIN +
-          Math.random() * (HIJACK_CAM_SWITCH_MAX - HIJACK_CAM_SWITCH_MIN);
-        glitchTimer = GLITCH_TIME * 2;
+        currentCam = pickRandomCamera(currentCam);
+        hijackCamTimer = HIJACK_CAM_SWITCH_SECONDS;
       }
-      glitchTimer = Math.max(glitchTimer, 0.25);
-      if (glitchTimer > 0) glitchTimer -= dt;
 
       if (hijackTimer >= CAMERA_HIJACK_SECONDS) {
-        camerasOpen = false;
-        mode = "jumpscare";
-        jumpscareTimer = 0;
+        startJumpscare();
       }
     }
 
     if (mode === "jumpscare") {
+      if (jumpscareNeedsSound) {
+        playJumpscareScream();
+        jumpscareNeedsSound = false;
+      }
       jumpscareTimer += dt;
       if (jumpscareTimer >= JUMPSCARE_SECONDS) mode = "game_over";
     }
@@ -1403,14 +1501,17 @@ async function main() {
       drawButton(playAgainButton, { selected: true });
     } else if (mode === "camera_hijack") {
       drawDarkImage(ctx, cameraImages[currentCam], 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-      drawCameraGlitchHeavy();
-      ctx.fillStyle = "rgba(0,0,0,0.6)";
-      ctx.fillRect(20, 130, 380, 44);
-      ctx.fillStyle = "rgb(255,200,150)";
-      ctx.font = "bold 28px sans-serif";
-      const camJitter = Math.floor(Math.random() * 5) - 2;
-      ctx.fillText(CAMERAS[currentCam][0], 30 + camJitter, 160);
-      drawCameraHijackWarning(CAMERA_HIJACK_SECONDS - hijackTimer);
+      drawMap(
+        mapRect,
+        currentCam,
+        sharkRoom,
+        showDrainMap,
+        sharkPull,
+        sharkThreatImage,
+        rayRoom,
+        rayPull,
+        rayThreatImage,
+      );
       drawClock(nightHours, 20, 45);
     } else if (mode === "jumpscare") {
       drawFnafJumpscare(threatImageFor(hijackAnimal), jumpscareTimer);
