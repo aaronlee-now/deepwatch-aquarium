@@ -7,7 +7,7 @@ const SCREEN_WIDTH = 1000;
 const SCREEN_HEIGHT = 600;
 
 // bump this when you ship an update (matches game.js?v= in index.html)
-const GAME_VERSION = 17;
+const GAME_VERSION = 19;
 
 const TURTLE_MOVE_TIME = 20.0;
 const SHARK_MOVE_TIME = 20.0;
@@ -26,7 +26,9 @@ const NEWSPAPER_SECONDS = 3.0;
 const TWELVE_AM_SECONDS = 2.0;
 // threat in office while you're on cams — animals mess with the controls
 const CAMERA_HIJACK_SECONDS = 20.0;
-const HIJACK_CAM_SWITCH_SECONDS = 3.0;
+// after you pick a cam, hijack waits this long then flips to a random one
+const HIJACK_CAM_SWITCH_MIN = 0.8;
+const HIJACK_CAM_SWITCH_MAX = 2.8;
 const JUMPSCARE_SECONDS = 2.2;
 const NEWSPAPER_TILT = -5;
 const PAPER_GRAY = [228, 226, 220];
@@ -606,6 +608,13 @@ function pickRandomCamera(excludeIndex) {
   return next;
 }
 
+function randomHijackCamDelay() {
+  return (
+    HIJACK_CAM_SWITCH_MIN +
+    Math.random() * (HIJACK_CAM_SWITCH_MAX - HIJACK_CAM_SWITCH_MIN)
+  );
+}
+
 /** Loud FNaF-style scream using Web Audio (no sound file needed). */
 function playJumpscareScream() {
   try {
@@ -1124,8 +1133,8 @@ async function main() {
     if (camerasOpen) {
       mode = "camera_hijack";
       hijackTimer = 0;
-      hijackCamTimer = HIJACK_CAM_SWITCH_SECONDS;
-      currentCam = pickRandomCamera(-1);
+      // keep the cam you're on; shortly flip to a random one
+      hijackCamTimer = randomHijackCamDelay();
     } else {
       startJumpscare();
     }
@@ -1171,17 +1180,13 @@ async function main() {
       if (pointInButton(playAgainButton, mx, my)) {
         mode = "instructions";
       }
-    } else if (mode === "camera_hijack") {
-      const clicked = mapClickToCamera(mx, my, mapRect);
-      if (clicked !== null) {
-        currentCam = pickRandomCamera(clicked);
-        hijackCamTimer = HIJACK_CAM_SWITCH_SECONDS;
+    } else if (mode === "camera_hijack" || (mode === "playing" && camerasOpen)) {
+      if (pointInButton(closeCamsButton, mx, my)) {
+        if (mode === "camera_hijack") startJumpscare();
+        else camerasOpen = false;
       }
-    } else if (mode === "playing") {
-      if (camerasOpen) {
-        if (pointInButton(closeCamsButton, mx, my)) camerasOpen = false;
-        if (pointInButton(mapModeButton, mx, my)) showDrainMap = !showDrainMap;
-        if (pointInButton(soundButton, mx, my) && soundCooldown <= 0) {
+      if (pointInButton(mapModeButton, mx, my)) showDrainMap = !showDrainMap;
+      if (pointInButton(soundButton, mx, my) && soundCooldown <= 0) {
           const target = cameraToRoomName(currentCam);
           let anyoneReacted = false;
           if (target !== null) {
@@ -1275,12 +1280,17 @@ async function main() {
           }
           soundCooldown = SOUND_COOLDOWN;
         }
-        const clicked = mapClickToCamera(mx, my, mapRect);
-        if (clicked !== null) currentCam = clicked;
-      } else {
-        if (pointInButton(drainButton, mx, my)) drainClosed = !drainClosed;
-        if (pointInButton(openCamsButton, mx, my)) camerasOpen = true;
+      const clicked = mapClickToCamera(mx, my, mapRect);
+      if (clicked !== null) {
+        currentCam = clicked;
+        // during hijack: you get the cam you picked, then it flips randomly soon
+        if (mode === "camera_hijack") {
+          hijackCamTimer = randomHijackCamDelay();
+        }
       }
+    } else if (mode === "playing") {
+      if (pointInButton(drainButton, mx, my)) drainClosed = !drainClosed;
+      if (pointInButton(openCamsButton, mx, my)) camerasOpen = true;
     }
   });
 
@@ -1417,10 +1427,15 @@ async function main() {
 
     if (mode === "camera_hijack") {
       hijackTimer += dt;
+      if (glitchTimer > 0) glitchTimer -= dt;
+      if (soundCooldown > 0) soundCooldown -= dt;
+      if (soundFlash > 0) soundFlash -= dt;
+      if (soundIgnoredFlash > 0) soundIgnoredFlash -= dt;
+
       hijackCamTimer -= dt;
       if (hijackCamTimer <= 0) {
         currentCam = pickRandomCamera(currentCam);
-        hijackCamTimer = HIJACK_CAM_SWITCH_SECONDS;
+        hijackCamTimer = randomHijackCamDelay();
       }
 
       if (hijackTimer >= CAMERA_HIJACK_SECONDS) {
@@ -1439,10 +1454,7 @@ async function main() {
 
     drainButton.text = drainClosed ? "OPEN DRAIN" : "CLOSE DRAIN";
     mapModeButton.text = showDrainMap ? "SHOW DOORS" : "SHOW DRAINS";
-    soundButton.text =
-      soundCooldown > 0
-        ? "WAIT " + (Math.floor(soundCooldown) + 1) + "s"
-        : "PLAY SOUND";
+    soundButton.text = soundCooldown > 0 ? "Playing sound" : "PLAY SOUND";
 
     ctx.fillStyle = "rgb(15,20,30)";
     ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -1499,23 +1511,9 @@ async function main() {
       ctx.fillText("Click PLAY AGAIN to start over.", SCREEN_WIDTH / 2, 320);
       ctx.textAlign = "left";
       drawButton(playAgainButton, { selected: true });
-    } else if (mode === "camera_hijack") {
-      drawDarkImage(ctx, cameraImages[currentCam], 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-      drawMap(
-        mapRect,
-        currentCam,
-        sharkRoom,
-        showDrainMap,
-        sharkPull,
-        sharkThreatImage,
-        rayRoom,
-        rayPull,
-        rayThreatImage,
-      );
-      drawClock(nightHours, 20, 45);
     } else if (mode === "jumpscare") {
       drawFnafJumpscare(threatImageFor(hijackAnimal), jumpscareTimer);
-    } else if (mode === "playing" && camerasOpen) {
+    } else if (mode === "camera_hijack" || (mode === "playing" && camerasOpen)) {
       drawDarkImage(ctx, cameraImages[currentCam], 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
       // always show which camera you're on (easy to check Cafe art)
@@ -1655,18 +1653,9 @@ async function main() {
       drawButton(mapModeButton, { selected: showDrainMap, transparent: true });
       drawButton(soundButton, {
         selected: soundFlash > 0,
-        danger: soundCooldown > 0 || soundIgnoredFlash > 0,
+        danger: soundCooldown > 0,
         transparent: true,
       });
-      if (soundFlash > 0) {
-        ctx.fillStyle = "rgb(255,230,80)";
-        ctx.font = "bold 36px sans-serif";
-        ctx.fillText("SOUND!", 20, 520);
-      } else if (soundIgnoredFlash > 0) {
-        ctx.fillStyle = "rgb(220,140,140)";
-        ctx.font = "bold 28px sans-serif";
-        ctx.fillText("IGNORED...", 20, 520);
-      }
       drawButton(closeCamsButton, { transparent: true });
       drawClock(nightHours, 20, 45);
     } else if (mode === "playing") {
