@@ -7,7 +7,7 @@ const SCREEN_WIDTH = 1000;
 const SCREEN_HEIGHT = 600;
 
 // bump this when you ship an update (matches game.js?v= in index.html)
-const GAME_VERSION = 19;
+const GAME_VERSION = 21;
 
 const TURTLE_MOVE_TIME = 20.0;
 const SHARK_MOVE_TIME = 20.0;
@@ -967,27 +967,50 @@ function mapClickToCamera(mx, my, mapRect) {
   return null;
 }
 
-function drawOxygenBar(x, y, width, height, oxygen) {
-  ctx.fillStyle = "rgb(200,220,230)";
-  ctx.font = "16px sans-serif";
-  ctx.fillText("OXYGEN", x, y - 8);
+function drawAirFan(cx, cy, radius, angle) {
+  ctx.save();
+  ctx.translate(cx, cy);
 
-  roundRect(ctx, x, y, width, height, 6);
-  ctx.fillStyle = "rgb(30,40,50)";
-  ctx.fill();
-  ctx.strokeStyle = "rgb(180,210,220)";
-  ctx.lineWidth = 2;
+  // outer ring
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgb(150,185,205)";
+  ctx.lineWidth = 3;
   ctx.stroke();
 
-  const fillWidth = Math.floor((width - 4) * (oxygen / 100));
-  if (fillWidth > 0) {
-    let fillColor = "rgb(60,160,180)";
-    if (oxygen <= 40) fillColor = "rgb(200,160,50)";
-    if (oxygen <= 20) fillColor = "rgb(200,70,70)";
-    roundRect(ctx, x + 2, y + 2, fillWidth, height - 4, 4);
-    ctx.fillStyle = fillColor;
+  // blades
+  ctx.rotate(angle);
+  for (let i = 0; i < 3; i++) {
+    ctx.rotate((Math.PI * 2) / 3);
+    ctx.beginPath();
+    ctx.ellipse(radius * 0.42, 0, radius * 0.42, radius * 0.16, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(130,175,200,0.9)";
     ctx.fill();
   }
+
+  // center hub
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 0.2, 0, Math.PI * 2);
+  ctx.fillStyle = "rgb(200,220,230)";
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawAirDisplay(x, y, oxygen, fanAngle) {
+  const airLeft = Math.max(0, Math.ceil(oxygen));
+  let color = "rgb(120,210,230)";
+  if (airLeft <= 40) color = "rgb(220,180,60)";
+  if (airLeft <= 20) color = "rgb(230,80,80)";
+
+  drawAirFan(x + 26, y + 6, 24, fanAngle);
+
+  ctx.fillStyle = "rgb(180,200,210)";
+  ctx.font = "16px sans-serif";
+  ctx.fillText("AIR", x + 60, y - 8);
+
+  ctx.fillStyle = color;
+  ctx.font = "bold 40px sans-serif";
+  ctx.fillText(String(airLeft), x + 60, y + 26);
 }
 
 function hourLabel(hoursPastMidnight) {
@@ -1073,7 +1096,7 @@ async function main() {
   const tryAgainButton = makeButton("TRY AGAIN", 400, 400, 200, 50);
   const startButton = makeButton("New Game", 70, 270, 250, 50);
   const playAgainButton = makeButton("PLAY AGAIN", 400, 400, 200, 50);
-  const oxygenBar = { x: 20, y: 560, width: 180, height: 22 };
+  let fanAngle = 0;
   const mapRect = { x: 580, y: 20, width: 400, height: 330 };
 
   function resetNight() {
@@ -1325,6 +1348,8 @@ async function main() {
       if (drainClosed) oxygen -= 3 * dt;
       else oxygen += 8 * dt;
       oxygen = Math.max(0, Math.min(100, oxygen));
+      // fan spins with the air; slows down when the drain is closed
+      fanAngle += (drainClosed ? 1.2 : 7) * dt;
       if (oxygen <= 0) {
         gameOverReason = "oxygen";
         mode = "game_over";
@@ -1659,7 +1684,7 @@ async function main() {
       drawButton(closeCamsButton, { transparent: true });
       drawClock(nightHours, 20, 45);
     } else if (mode === "playing") {
-      drawDarkImage(ctx, officeImage, 150, 40, 700, 400);
+      drawDarkImage(ctx, officeImage, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
       ctx.fillStyle = "rgb(220,240,255)";
       ctx.font = "bold 32px sans-serif";
       ctx.fillText("Night Guard Office", 20, 45);
@@ -1686,13 +1711,7 @@ async function main() {
       ctx.fillText("Click CAMERAS to check the aquarium.", 20, 475);
       drawButton(openCamsButton);
       drawButton(drainButton, { danger: drainClosed });
-      drawOxygenBar(
-        oxygenBar.x,
-        oxygenBar.y,
-        oxygenBar.width,
-        oxygenBar.height,
-        oxygen
-      );
+      drawAirDisplay(20, 560, oxygen, fanAngle);
     }
 
     requestAnimationFrame(frame);
