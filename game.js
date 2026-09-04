@@ -7,7 +7,7 @@ const SCREEN_WIDTH = 1000;
 const SCREEN_HEIGHT = 600;
 
 // bump this when you ship an update (matches game.js?v= in index.html)
-const GAME_VERSION = 24;
+const GAME_VERSION = 26;
 
 const TURTLE_MOVE_TIME = 20.0;
 const SHARK_MOVE_TIME = 20.0;
@@ -18,6 +18,9 @@ const SECONDS_PER_HOUR = 20.0;
 const GLITCH_TIME = 0.5;
 const SOUND_COOLDOWN = 3.5;
 const SOUND_IGNORE_CHANCE = 0.35;
+// too many sounds / camera uses before systems need a reset
+const SYSTEMS_ABUSE_LIMIT = 6;
+const SYSTEMS_RESET_SECONDS = 15.0;
 // seconds to crawl in from a next-door room if you only play sound once
 const SOUND_PULL_SECONDS = 6.0;
 // each successful sound while dragging bumps them farther in
@@ -616,64 +619,38 @@ function randomHijackCamDelay() {
 }
 
 /**
- * Play the lure sound: a little kid saying "Hi" with giggling.
- * Random each time (pitch, words, giggle pattern).
+ * Play the lure sound: a little kid saying "Hi" or giggling.
+ * Random each time (pitch, rate, and which line).
  */
 function playLureKidSound() {
   try {
+    if (!window.speechSynthesis) return;
     // stop any leftover speech so clicks don't pile up
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
+    window.speechSynthesis.cancel();
 
-    // random kid-like "Hi" lines
-    const hiLines = [
+    // sometimes "Hi", sometimes giggles, sometimes both
+    const lines = [
       "Hi",
       "Hi!",
       "Hiii",
       "Hi hi",
-      "Hi hee hee hee",
-      "Heehee heehee hi",
+      "Heehee",
+      "Hee hee hee",
+      "Heehee heehee",
+      "Hi heehee",
+      "Heehee hi",
       "Hi! Heehee heehee",
-      "Hee hee hee hee hi",
     ];
-    const line = hiLines[Math.floor(Math.random() * hiLines.length)];
+    const line = lines[Math.floor(Math.random() * lines.length)];
 
-    if (window.speechSynthesis) {
-      const talk = new SpeechSynthesisUtterance(line);
-      // high pitch + slightly silly rate = more like a little kid
-      talk.pitch = 1.55 + Math.random() * 0.45;
-      talk.rate = 0.85 + Math.random() * 0.35;
-      talk.volume = 1;
-      window.speechSynthesis.speak(talk);
-    }
-
-    // extra random giggles with Web Audio (bubbly high tones)
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const audioCtx = new AudioCtx();
-    const now = audioCtx.currentTime;
-    const giggleCount = 5 + Math.floor(Math.random() * 6);
-    const startDelay = 0.1 + Math.random() * 0.25;
-
-    for (let i = 0; i < giggleCount; i++) {
-      const t = now + startDelay + i * (0.08 + Math.random() * 0.08);
-      const osc = audioCtx.createOscillator();
-      osc.type = "sine";
-      const base = 520 + Math.random() * 380;
-      osc.frequency.setValueAtTime(base, t);
-      osc.frequency.exponentialRampToValueAtTime(base * 1.35, t + 0.08);
-      const gain = audioCtx.createGain();
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.18 + Math.random() * 0.1, t + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start(t);
-      osc.stop(t + 0.14);
-    }
+    const talk = new SpeechSynthesisUtterance(line);
+    // high pitch + slightly silly rate = more like a little kid
+    talk.pitch = 1.55 + Math.random() * 0.45;
+    talk.rate = 0.85 + Math.random() * 0.35;
+    talk.volume = 1;
+    window.speechSynthesis.speak(talk);
   } catch (err) {
-    // browser may block audio until the player has clicked — ignore
+    // browser may block speech until the player has clicked — ignore
   }
 }
 
@@ -1084,6 +1061,11 @@ async function main() {
   let soundCooldown = 0;
   let soundFlash = 0;
   let soundIgnoredFlash = 0;
+  // how many times you used sound / cameras; too many locks systems
+  let systemsAbuse = 0;
+  let systemsDown = false;
+  // > 0 means a reset is running (counts down to 0)
+  let systemsResetTimer = 0;
   // slow crawl into a next-door camera room (null when not dragging)
   let turtlePull = null;
   let sharkPull = null;
@@ -1102,6 +1084,7 @@ async function main() {
   const mapModeButton = makeButton("SHOW DRAINS", 600, 360, 180, 40);
   const soundButton = makeButton("PLAY SOUND", 20, 540, 170, 45);
   const drainButton = makeButton("CLOSE DRAIN", 20, 500, 180, 50);
+  const resetSystemsButton = makeButton("RESET DRAIN & CAMS", 380, 500, 260, 50);
   const tryAgainButton = makeButton("TRY AGAIN", 400, 400, 200, 50);
   const startButton = makeButton("New Game", 70, 270, 250, 50);
   const playAgainButton = makeButton("PLAY AGAIN", 400, 400, 200, 50);
@@ -1129,6 +1112,9 @@ async function main() {
     soundCooldown = 0;
     soundFlash = 0;
     soundIgnoredFlash = 0;
+    systemsAbuse = 0;
+    systemsDown = false;
+    systemsResetTimer = 0;
     turtlePull = null;
     sharkPull = null;
     crabPull = null;
@@ -1176,6 +1162,17 @@ async function main() {
     if (threatEntersOffice(oldRoom, newRoom)) beginOfficeAttack(animal);
   }
 
+  // each sound / camera use heats the systems; too many = locked until reset
+  function bumpSystemsAbuse() {
+    if (systemsDown || systemsResetTimer > 0) return;
+    systemsAbuse += 1;
+    if (systemsAbuse >= SYSTEMS_ABUSE_LIMIT) {
+      systemsDown = true;
+      camerasOpen = false;
+      drainClosed = false;
+    }
+  }
+
   // tip: open http://.../?room=Cafe to jump straight to that camera
   if (urlRoom) {
     for (const [name, cam] of MAP_ROOMS) {
@@ -1218,8 +1215,14 @@ async function main() {
         else camerasOpen = false;
       }
       if (pointInButton(mapModeButton, mx, my)) showDrainMap = !showDrainMap;
-      if (pointInButton(soundButton, mx, my) && soundCooldown <= 0) {
+      if (
+        pointInButton(soundButton, mx, my) &&
+        soundCooldown <= 0 &&
+        !systemsDown &&
+        systemsResetTimer <= 0
+      ) {
           playLureKidSound();
+          bumpSystemsAbuse();
           const target = cameraToRoomName(currentCam);
           let anyoneReacted = false;
           if (target !== null) {
@@ -1314,7 +1317,8 @@ async function main() {
           soundCooldown = SOUND_COOLDOWN;
         }
       const clicked = mapClickToCamera(mx, my, mapRect);
-      if (clicked !== null) {
+      if (clicked !== null && !systemsDown && systemsResetTimer <= 0) {
+        if (clicked !== currentCam) bumpSystemsAbuse();
         currentCam = clicked;
         // during hijack: you get the cam you picked, then it flips randomly soon
         if (mode === "camera_hijack") {
@@ -1322,8 +1326,30 @@ async function main() {
         }
       }
     } else if (mode === "playing") {
-      if (pointInButton(drainButton, mx, my)) drainClosed = !drainClosed;
-      if (pointInButton(openCamsButton, mx, my)) camerasOpen = true;
+      if (
+        pointInButton(drainButton, mx, my) &&
+        !systemsDown &&
+        systemsResetTimer <= 0
+      ) {
+        drainClosed = !drainClosed;
+      }
+      if (
+        pointInButton(openCamsButton, mx, my) &&
+        !systemsDown &&
+        systemsResetTimer <= 0
+      ) {
+        camerasOpen = true;
+        bumpSystemsAbuse();
+      }
+      if (
+        systemsDown &&
+        systemsResetTimer <= 0 &&
+        pointInButton(resetSystemsButton, mx, my)
+      ) {
+        systemsResetTimer = SYSTEMS_RESET_SECONDS;
+        camerasOpen = false;
+        drainClosed = false;
+      }
     }
   });
 
@@ -1369,6 +1395,17 @@ async function main() {
       if (soundCooldown > 0) soundCooldown -= dt;
       if (soundFlash > 0) soundFlash -= dt;
       if (soundIgnoredFlash > 0) soundIgnoredFlash -= dt;
+
+      if (systemsResetTimer > 0) {
+        systemsResetTimer -= dt;
+        camerasOpen = false;
+        drainClosed = false;
+        if (systemsResetTimer <= 0) {
+          systemsResetTimer = 0;
+          systemsDown = false;
+          systemsAbuse = 0;
+        }
+      }
 
       // slow crawl continues even if you wait
       const oldTurtleRoom = turtleRoom;
@@ -1489,7 +1526,20 @@ async function main() {
 
     drainButton.text = drainClosed ? "OPEN DRAIN" : "CLOSE DRAIN";
     mapModeButton.text = showDrainMap ? "SHOW DOORS" : "SHOW DRAINS";
-    soundButton.text = soundCooldown > 0 ? "Playing sound" : "PLAY SOUND";
+    if (systemsDown || systemsResetTimer > 0) {
+      soundButton.text = "OFFLINE";
+      openCamsButton.text = "OFFLINE";
+      drainButton.text = "OFFLINE";
+    } else {
+      soundButton.text = soundCooldown > 0 ? "Playing sound" : "PLAY SOUND";
+      openCamsButton.text = "CAMERAS";
+    }
+    if (systemsResetTimer > 0) {
+      resetSystemsButton.text =
+        "Resetting... " + (Math.floor(systemsResetTimer) + 1) + "s";
+    } else {
+      resetSystemsButton.text = "RESET DRAIN & CAMS";
+    }
 
     ctx.fillStyle = "rgb(15,20,30)";
     ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -1688,7 +1738,7 @@ async function main() {
       drawButton(mapModeButton, { selected: showDrainMap, transparent: true });
       drawButton(soundButton, {
         selected: soundFlash > 0,
-        danger: soundCooldown > 0,
+        danger: soundCooldown > 0 || systemsDown || systemsResetTimer > 0,
         transparent: true,
       });
       drawButton(closeCamsButton, { transparent: true });
@@ -1716,8 +1766,27 @@ async function main() {
         drawThreatSprite(ctx, rayThreatImage, 620, 260, 150);
       }
 
-      drawButton(openCamsButton);
-      drawButton(drainButton, { danger: drainClosed });
+      drawButton(openCamsButton, {
+        danger: systemsDown || systemsResetTimer > 0,
+      });
+      drawButton(drainButton, {
+        danger: drainClosed || systemsDown || systemsResetTimer > 0,
+      });
+      if (systemsDown || systemsResetTimer > 0) {
+        drawButton(resetSystemsButton, {
+          selected: systemsResetTimer > 0,
+          danger: systemsResetTimer <= 0,
+        });
+        ctx.fillStyle = "rgb(255,180,120)";
+        ctx.font = "bold 22px sans-serif";
+        ctx.fillText(
+          systemsResetTimer > 0
+            ? "Systems resetting — wait..."
+            : "Systems overloaded! Reset drain & cams.",
+          20,
+          470
+        );
+      }
       // fan + number sit to the right of the drain button (no overlap)
       drawAirDisplay(215, 525, oxygen, fanAngle);
     }
