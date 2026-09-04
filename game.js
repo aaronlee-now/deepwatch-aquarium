@@ -7,7 +7,7 @@ const SCREEN_WIDTH = 1000;
 const SCREEN_HEIGHT = 600;
 
 // bump this when you ship an update (matches game.js?v= in index.html)
-const GAME_VERSION = 21;
+const GAME_VERSION = 24;
 
 const TURTLE_MOVE_TIME = 20.0;
 const SHARK_MOVE_TIME = 20.0;
@@ -615,6 +615,68 @@ function randomHijackCamDelay() {
   );
 }
 
+/**
+ * Play the lure sound: a little kid saying "Hi" with giggling.
+ * Random each time (pitch, words, giggle pattern).
+ */
+function playLureKidSound() {
+  try {
+    // stop any leftover speech so clicks don't pile up
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+
+    // random kid-like "Hi" lines
+    const hiLines = [
+      "Hi",
+      "Hi!",
+      "Hiii",
+      "Hi hi",
+      "Hi hee hee hee",
+      "Heehee heehee hi",
+      "Hi! Heehee heehee",
+      "Hee hee hee hee hi",
+    ];
+    const line = hiLines[Math.floor(Math.random() * hiLines.length)];
+
+    if (window.speechSynthesis) {
+      const talk = new SpeechSynthesisUtterance(line);
+      // high pitch + slightly silly rate = more like a little kid
+      talk.pitch = 1.55 + Math.random() * 0.45;
+      talk.rate = 0.85 + Math.random() * 0.35;
+      talk.volume = 1;
+      window.speechSynthesis.speak(talk);
+    }
+
+    // extra random giggles with Web Audio (bubbly high tones)
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const audioCtx = new AudioCtx();
+    const now = audioCtx.currentTime;
+    const giggleCount = 5 + Math.floor(Math.random() * 6);
+    const startDelay = 0.1 + Math.random() * 0.25;
+
+    for (let i = 0; i < giggleCount; i++) {
+      const t = now + startDelay + i * (0.08 + Math.random() * 0.08);
+      const osc = audioCtx.createOscillator();
+      osc.type = "sine";
+      const base = 520 + Math.random() * 380;
+      osc.frequency.setValueAtTime(base, t);
+      osc.frequency.exponentialRampToValueAtTime(base * 1.35, t + 0.08);
+      const gain = audioCtx.createGain();
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.18 + Math.random() * 0.1, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.14);
+    }
+  } catch (err) {
+    // browser may block audio until the player has clicked — ignore
+  }
+}
+
 /** Loud FNaF-style scream using Web Audio (no sound file needed). */
 function playJumpscareScream() {
   try {
@@ -683,72 +745,22 @@ function drawFnafJumpscare(image, timer) {
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-  // rapid strobe — black / white / red like FNaF
-  if (timer < 0.5) {
-    const frame = Math.floor(timer * 32);
-    if (frame % 3 === 0) {
-      ctx.fillStyle = "#000";
-      ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-    } else if (frame % 3 === 1 && timer < 0.14) {
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-    } else if (timer < 0.22) {
-      ctx.fillStyle = "rgba(180,0,0,0.9)";
-      ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-    }
-  }
+  if (!image) return;
 
-  const faceStart = 0.07;
-  if (timer >= faceStart && image) {
-    const faceTime = timer - faceStart;
-    const zoomT = Math.min(1, faceTime * 5.5);
-    const ease = 1 - Math.pow(1 - zoomT, 4);
-    const size = 280 + ease * 580;
+  // face just appears and wiggles around (no zoom / strobe)
+  const size = 460;
+  const wiggleX = Math.sin(timer * 38) * 32 + (Math.random() - 0.5) * 20;
+  const wiggleY = Math.cos(timer * 31) * 28 + (Math.random() - 0.5) * 20;
+  const tilt = Math.sin(timer * 22) * 0.12 + (Math.random() - 0.5) * 0.06;
 
-    let shakeX = 0;
-    let shakeY = 0;
-    if (faceTime < 0.5) {
-      const shakeAmt = 42 * (1 - faceTime / 0.5);
-      shakeX = (Math.random() - 0.5) * shakeAmt * 2.2;
-      shakeY = (Math.random() - 0.5) * shakeAmt * 2.2;
-    } else {
-      shakeX = (Math.random() - 0.5) * 10;
-      shakeY = (Math.random() - 0.5) * 10;
-    }
+  const cx = SCREEN_WIDTH / 2 + wiggleX;
+  const cy = SCREEN_HEIGHT / 2 + wiggleY;
 
-    const slamPulse = faceTime < 0.18 ? 1 + Math.sin(faceTime * 55) * 0.08 : 1;
-    const drawSize = size * slamPulse;
-    const cx = SCREEN_WIDTH / 2 + shakeX;
-    const cy = SCREEN_HEIGHT / 2 + shakeY - 40;
-
-    // dark duplicate behind — face feels closer
-    ctx.save();
-    ctx.globalAlpha = 0.5;
-    drawThreatSprite(ctx, image, cx + 16, cy + 18, drawSize * 1.04);
-    ctx.restore();
-
-    drawThreatSprite(ctx, image, cx, cy, drawSize);
-
-    if (faceTime < 0.15) {
-      ctx.fillStyle = "rgba(255,30,30,0.35)";
-      ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-    }
-  }
-
-  // pulsing red + black vignette — tunnel vision
-  const redPulse = 0.45 + Math.sin(timer * 14) * 0.2;
-  for (let i = 0; i < 45; i++) {
-    const alpha = (redPulse * 80 * (1 - i / 45)) / 255;
-    ctx.strokeStyle = `rgba(140,0,0,${alpha})`;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(i, i, SCREEN_WIDTH - i * 2, SCREEN_HEIGHT - i * 2);
-  }
-  for (let i = 0; i < 38; i++) {
-    const alpha = (95 * (1 - i / 38)) / 255;
-    ctx.strokeStyle = `rgba(0,0,0,${alpha})`;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(i, i, SCREEN_WIDTH - i * 2, SCREEN_HEIGHT - i * 2);
-  }
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(tilt);
+  drawThreatSprite(ctx, image, 0, 0, size);
+  ctx.restore();
 }
 
 function drawCameraGlitch() {
@@ -975,7 +987,7 @@ function drawAirFan(cx, cy, radius, angle) {
   ctx.beginPath();
   ctx.arc(0, 0, radius, 0, Math.PI * 2);
   ctx.strokeStyle = "rgb(150,185,205)";
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2;
   ctx.stroke();
 
   // blades
@@ -1002,15 +1014,12 @@ function drawAirDisplay(x, y, oxygen, fanAngle) {
   if (airLeft <= 40) color = "rgb(220,180,60)";
   if (airLeft <= 20) color = "rgb(230,80,80)";
 
-  drawAirFan(x + 26, y + 6, 24, fanAngle);
-
-  ctx.fillStyle = "rgb(180,200,210)";
-  ctx.font = "16px sans-serif";
-  ctx.fillText("AIR", x + 60, y - 8);
+  const fanR = 14;
+  drawAirFan(x + fanR, y, fanR, fanAngle);
 
   ctx.fillStyle = color;
-  ctx.font = "bold 40px sans-serif";
-  ctx.fillText(String(airLeft), x + 60, y + 26);
+  ctx.font = "bold 28px sans-serif";
+  ctx.fillText(String(airLeft), x + fanR * 2 + 12, y + 9);
 }
 
 function hourLabel(hoursPastMidnight) {
@@ -1210,6 +1219,7 @@ async function main() {
       }
       if (pointInButton(mapModeButton, mx, my)) showDrainMap = !showDrainMap;
       if (pointInButton(soundButton, mx, my) && soundCooldown <= 0) {
+          playLureKidSound();
           const target = cameraToRoomName(currentCam);
           let anyoneReacted = false;
           if (target !== null) {
@@ -1346,7 +1356,7 @@ async function main() {
       }
 
       if (drainClosed) oxygen -= 3 * dt;
-      else oxygen += 8 * dt;
+      else oxygen += 2.5 * dt;
       oxygen = Math.max(0, Math.min(100, oxygen));
       // fan spins with the air; slows down when the drain is closed
       fanAngle += (drainClosed ? 1.2 : 7) * dt;
@@ -1706,12 +1716,10 @@ async function main() {
         drawThreatSprite(ctx, rayThreatImage, 620, 260, 150);
       }
 
-      ctx.fillStyle = "rgb(160,180,190)";
-      ctx.font = "20px sans-serif";
-      ctx.fillText("Click CAMERAS to check the aquarium.", 20, 475);
       drawButton(openCamsButton);
       drawButton(drainButton, { danger: drainClosed });
-      drawAirDisplay(20, 560, oxygen, fanAngle);
+      // fan + number sit to the right of the drain button (no overlap)
+      drawAirDisplay(215, 525, oxygen, fanAngle);
     }
 
     requestAnimationFrame(frame);
