@@ -7,7 +7,7 @@ const SCREEN_WIDTH = 1000;
 const SCREEN_HEIGHT = 600;
 
 // bump this when you ship an update (matches game.js?v= in index.html)
-const GAME_VERSION = 26;
+const GAME_VERSION = 27;
 
 const TURTLE_MOVE_TIME = 20.0;
 const SHARK_MOVE_TIME = 20.0;
@@ -18,9 +18,11 @@ const SECONDS_PER_HOUR = 20.0;
 const GLITCH_TIME = 0.5;
 const SOUND_COOLDOWN = 3.5;
 const SOUND_IGNORE_CHANCE = 0.35;
-// too many sounds / camera uses before systems need a reset
-const SYSTEMS_ABUSE_LIMIT = 6;
-const SYSTEMS_RESET_SECONDS = 15.0;
+// rare: only after lots of spam do sound / cameras need a reset
+const SOUND_ABUSE_LIMIT = 22;
+const CAM_ABUSE_LIMIT = 28;
+const SYSTEMS_RESET_MIN = 5.0;
+const SYSTEMS_RESET_MAX = 15.0;
 // seconds to crawl in from a next-door room if you only play sound once
 const SOUND_PULL_SECONDS = 6.0;
 // each successful sound while dragging bumps them farther in
@@ -1061,11 +1063,13 @@ async function main() {
   let soundCooldown = 0;
   let soundFlash = 0;
   let soundIgnoredFlash = 0;
-  // how many times you used sound / cameras; too many locks systems
-  let systemsAbuse = 0;
-  let systemsDown = false;
-  // > 0 means a reset is running (counts down to 0)
-  let systemsResetTimer = 0;
+  // separate overload for sound vs cameras (rare)
+  let soundAbuse = 0;
+  let soundDown = false;
+  let soundResetTimer = 0;
+  let camAbuse = 0;
+  let camDown = false;
+  let camResetTimer = 0;
   // slow crawl into a next-door camera room (null when not dragging)
   let turtlePull = null;
   let sharkPull = null;
@@ -1084,7 +1088,9 @@ async function main() {
   const mapModeButton = makeButton("SHOW DRAINS", 600, 360, 180, 40);
   const soundButton = makeButton("PLAY SOUND", 20, 540, 170, 45);
   const drainButton = makeButton("CLOSE DRAIN", 20, 500, 180, 50);
-  const resetSystemsButton = makeButton("RESET DRAIN & CAMS", 380, 500, 260, 50);
+  // sit stacked above Close Drain
+  const resetCamButton = makeButton("RESET CAMERAS", 20, 390, 180, 45);
+  const resetSoundButton = makeButton("RESET SOUND", 20, 445, 180, 45);
   const tryAgainButton = makeButton("TRY AGAIN", 400, 400, 200, 50);
   const startButton = makeButton("New Game", 70, 270, 250, 50);
   const playAgainButton = makeButton("PLAY AGAIN", 400, 400, 200, 50);
@@ -1112,9 +1118,12 @@ async function main() {
     soundCooldown = 0;
     soundFlash = 0;
     soundIgnoredFlash = 0;
-    systemsAbuse = 0;
-    systemsDown = false;
-    systemsResetTimer = 0;
+    soundAbuse = 0;
+    soundDown = false;
+    soundResetTimer = 0;
+    camAbuse = 0;
+    camDown = false;
+    camResetTimer = 0;
     turtlePull = null;
     sharkPull = null;
     crabPull = null;
@@ -1162,14 +1171,28 @@ async function main() {
     if (threatEntersOffice(oldRoom, newRoom)) beginOfficeAttack(animal);
   }
 
-  // each sound / camera use heats the systems; too many = locked until reset
-  function bumpSystemsAbuse() {
-    if (systemsDown || systemsResetTimer > 0) return;
-    systemsAbuse += 1;
-    if (systemsAbuse >= SYSTEMS_ABUSE_LIMIT) {
-      systemsDown = true;
+  // each spam heats that system; rare lock until you reset it
+  function randomResetSeconds() {
+    return (
+      SYSTEMS_RESET_MIN +
+      Math.random() * (SYSTEMS_RESET_MAX - SYSTEMS_RESET_MIN)
+    );
+  }
+
+  function bumpSoundAbuse() {
+    if (soundDown || soundResetTimer > 0) return;
+    soundAbuse += 1;
+    if (soundAbuse >= SOUND_ABUSE_LIMIT) {
+      soundDown = true;
+    }
+  }
+
+  function bumpCamAbuse() {
+    if (camDown || camResetTimer > 0) return;
+    camAbuse += 1;
+    if (camAbuse >= CAM_ABUSE_LIMIT) {
+      camDown = true;
       camerasOpen = false;
-      drainClosed = false;
     }
   }
 
@@ -1218,11 +1241,11 @@ async function main() {
       if (
         pointInButton(soundButton, mx, my) &&
         soundCooldown <= 0 &&
-        !systemsDown &&
-        systemsResetTimer <= 0
+        !soundDown &&
+        soundResetTimer <= 0
       ) {
           playLureKidSound();
-          bumpSystemsAbuse();
+          bumpSoundAbuse();
           const target = cameraToRoomName(currentCam);
           let anyoneReacted = false;
           if (target !== null) {
@@ -1317,8 +1340,8 @@ async function main() {
           soundCooldown = SOUND_COOLDOWN;
         }
       const clicked = mapClickToCamera(mx, my, mapRect);
-      if (clicked !== null && !systemsDown && systemsResetTimer <= 0) {
-        if (clicked !== currentCam) bumpSystemsAbuse();
+      if (clicked !== null && !camDown && camResetTimer <= 0) {
+        if (clicked !== currentCam) bumpCamAbuse();
         currentCam = clicked;
         // during hijack: you get the cam you picked, then it flips randomly soon
         if (mode === "camera_hijack") {
@@ -1326,29 +1349,31 @@ async function main() {
         }
       }
     } else if (mode === "playing") {
-      if (
-        pointInButton(drainButton, mx, my) &&
-        !systemsDown &&
-        systemsResetTimer <= 0
-      ) {
+      if (pointInButton(drainButton, mx, my)) {
         drainClosed = !drainClosed;
       }
       if (
         pointInButton(openCamsButton, mx, my) &&
-        !systemsDown &&
-        systemsResetTimer <= 0
+        !camDown &&
+        camResetTimer <= 0
       ) {
         camerasOpen = true;
-        bumpSystemsAbuse();
+        bumpCamAbuse();
       }
       if (
-        systemsDown &&
-        systemsResetTimer <= 0 &&
-        pointInButton(resetSystemsButton, mx, my)
+        soundDown &&
+        soundResetTimer <= 0 &&
+        pointInButton(resetSoundButton, mx, my)
       ) {
-        systemsResetTimer = SYSTEMS_RESET_SECONDS;
+        soundResetTimer = randomResetSeconds();
+      }
+      if (
+        camDown &&
+        camResetTimer <= 0 &&
+        pointInButton(resetCamButton, mx, my)
+      ) {
+        camResetTimer = randomResetSeconds();
         camerasOpen = false;
-        drainClosed = false;
       }
     }
   });
@@ -1396,14 +1421,21 @@ async function main() {
       if (soundFlash > 0) soundFlash -= dt;
       if (soundIgnoredFlash > 0) soundIgnoredFlash -= dt;
 
-      if (systemsResetTimer > 0) {
-        systemsResetTimer -= dt;
+      if (soundResetTimer > 0) {
+        soundResetTimer -= dt;
+        if (soundResetTimer <= 0) {
+          soundResetTimer = 0;
+          soundDown = false;
+          soundAbuse = 0;
+        }
+      }
+      if (camResetTimer > 0) {
+        camResetTimer -= dt;
         camerasOpen = false;
-        drainClosed = false;
-        if (systemsResetTimer <= 0) {
-          systemsResetTimer = 0;
-          systemsDown = false;
-          systemsAbuse = 0;
+        if (camResetTimer <= 0) {
+          camResetTimer = 0;
+          camDown = false;
+          camAbuse = 0;
         }
       }
 
@@ -1526,20 +1558,20 @@ async function main() {
 
     drainButton.text = drainClosed ? "OPEN DRAIN" : "CLOSE DRAIN";
     mapModeButton.text = showDrainMap ? "SHOW DOORS" : "SHOW DRAINS";
-    if (systemsDown || systemsResetTimer > 0) {
+    if (soundDown || soundResetTimer > 0) {
       soundButton.text = "OFFLINE";
-      openCamsButton.text = "OFFLINE";
-      drainButton.text = "OFFLINE";
     } else {
       soundButton.text = soundCooldown > 0 ? "Playing sound" : "PLAY SOUND";
+    }
+    if (camDown || camResetTimer > 0) {
+      openCamsButton.text = "OFFLINE";
+    } else {
       openCamsButton.text = "CAMERAS";
     }
-    if (systemsResetTimer > 0) {
-      resetSystemsButton.text =
-        "Resetting... " + (Math.floor(systemsResetTimer) + 1) + "s";
-    } else {
-      resetSystemsButton.text = "RESET DRAIN & CAMS";
-    }
+    resetSoundButton.text =
+      soundResetTimer > 0 ? "Resetting..." : "RESET SOUND";
+    resetCamButton.text =
+      camResetTimer > 0 ? "Resetting..." : "RESET CAMERAS";
 
     ctx.fillStyle = "rgb(15,20,30)";
     ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -1738,7 +1770,7 @@ async function main() {
       drawButton(mapModeButton, { selected: showDrainMap, transparent: true });
       drawButton(soundButton, {
         selected: soundFlash > 0,
-        danger: soundCooldown > 0 || systemsDown || systemsResetTimer > 0,
+        danger: soundCooldown > 0 || soundDown || soundResetTimer > 0,
         transparent: true,
       });
       drawButton(closeCamsButton, { transparent: true });
@@ -1767,25 +1799,20 @@ async function main() {
       }
 
       drawButton(openCamsButton, {
-        danger: systemsDown || systemsResetTimer > 0,
+        danger: camDown || camResetTimer > 0,
       });
-      drawButton(drainButton, {
-        danger: drainClosed || systemsDown || systemsResetTimer > 0,
-      });
-      if (systemsDown || systemsResetTimer > 0) {
-        drawButton(resetSystemsButton, {
-          selected: systemsResetTimer > 0,
-          danger: systemsResetTimer <= 0,
+      drawButton(drainButton, { danger: drainClosed });
+      if (soundDown || soundResetTimer > 0) {
+        drawButton(resetSoundButton, {
+          selected: soundResetTimer > 0,
+          danger: soundResetTimer <= 0,
         });
-        ctx.fillStyle = "rgb(255,180,120)";
-        ctx.font = "bold 22px sans-serif";
-        ctx.fillText(
-          systemsResetTimer > 0
-            ? "Systems resetting — wait..."
-            : "Systems overloaded! Reset drain & cams.",
-          20,
-          470
-        );
+      }
+      if (camDown || camResetTimer > 0) {
+        drawButton(resetCamButton, {
+          selected: camResetTimer > 0,
+          danger: camResetTimer <= 0,
+        });
       }
       // fan + number sit to the right of the drain button (no overlap)
       drawAirDisplay(215, 525, oxygen, fanAngle);
