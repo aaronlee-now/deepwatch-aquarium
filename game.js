@@ -7,7 +7,7 @@ const SCREEN_WIDTH = 1000;
 const SCREEN_HEIGHT = 600;
 
 // bump this when you ship an update (matches game.js?v= in index.html)
-const GAME_VERSION = 27;
+const GAME_VERSION = 28;
 
 const TURTLE_MOVE_TIME = 20.0;
 const SHARK_MOVE_TIME = 20.0;
@@ -631,6 +631,69 @@ function randomHijackCamDelay() {
   );
 }
 
+/** Try to pick a high / girl / kid-sounding voice (not a deep man voice). */
+function pickKidVoice() {
+  const voices = window.speechSynthesis.getVoices() || [];
+  if (!voices.length) return null;
+
+  const english = voices.filter(
+    (v) => v.lang && v.lang.toLowerCase().startsWith("en")
+  );
+  const pool = english.length ? english : voices;
+
+  const likeKid = [
+    "child",
+    "kid",
+    "girl",
+    "samantha",
+    "karen",
+    "victoria",
+    "zira",
+    "fiona",
+    "moira",
+    "tessa",
+    "veena",
+    "kathy",
+    "princess",
+    "female",
+  ];
+  const likeMan = [
+    "male",
+    "man",
+    "david",
+    "daniel",
+    "alex",
+    "fred",
+    "bruce",
+    "tom",
+    "ralph",
+    "jorge",
+    "diego",
+    "aaron",
+    "james",
+    "mark",
+    "google uk english male",
+  ];
+
+  function nameOf(v) {
+    return (v.name || "").toLowerCase();
+  }
+
+  const preferred = pool.filter((v) => {
+    const n = nameOf(v);
+    return likeKid.some((w) => n.includes(w)) && !likeMan.some((w) => n.includes(w));
+  });
+  if (preferred.length) {
+    return preferred[Math.floor(Math.random() * preferred.length)];
+  }
+
+  const notMan = pool.filter((v) => !likeMan.some((w) => nameOf(v).includes(w)));
+  if (notMan.length) {
+    return notMan[Math.floor(Math.random() * notMan.length)];
+  }
+  return pool[0];
+}
+
 /**
  * Play the lure sound: a little kid saying "Hi" or giggling.
  * Random each time (pitch, rate, and which line).
@@ -657,9 +720,11 @@ function playLureKidSound() {
     const line = lines[Math.floor(Math.random() * lines.length)];
 
     const talk = new SpeechSynthesisUtterance(line);
-    // high pitch + slightly silly rate = more like a little kid
-    talk.pitch = 1.55 + Math.random() * 0.45;
-    talk.rate = 0.85 + Math.random() * 0.35;
+    const kidVoice = pickKidVoice();
+    if (kidVoice) talk.voice = kidVoice;
+    // max pitch (browser max is usually 2) so it sounds little, not like a man
+    talk.pitch = 1.85 + Math.random() * 0.15;
+    talk.rate = 0.95 + Math.random() * 0.25;
     talk.volume = 1;
     window.speechSynthesis.speak(talk);
   } catch (err) {
@@ -1036,6 +1101,14 @@ function canvasMousePos(event) {
 }
 
 async function main() {
+  // load speech voices early so PLAY SOUND can pick a kid/girl voice
+  if (window.speechSynthesis) {
+    window.speechSynthesis.getVoices();
+    window.speechSynthesis.onvoiceschanged = () => {
+      window.speechSynthesis.getVoices();
+    };
+  }
+
   const titleBg = await loadImage("images/lobby.png");
   const officeImage = await loadImage("images/office.png");
   const sharkThreatImage = await loadImage("images/shark_threat.png");
