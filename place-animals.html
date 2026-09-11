@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Place Animals — Deepwatch</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #0a0c10;
+      color: #c8d0d8;
+      font-family: system-ui, sans-serif;
+      padding: 1rem;
+    }
+
+    h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.35rem;
+      color: #e8eef4;
+    }
+
+    .sub {
+      margin: 0 0 1rem;
+      color: #8a96a4;
+      font-size: 0.95rem;
+    }
+
+    .sub a { color: #9ec4e0; }
+
+    .layout {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+
+    #stage {
+      display: block;
+      background: #0f141e;
+      border: 2px solid #2a3544;
+      max-width: 100%;
+      height: auto;
+      cursor: grab;
+      touch-action: none;
+    }
+
+    #stage.dragging { cursor: grabbing; }
+
+    .panel {
+      width: 260px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      font-size: 0.85rem;
+      color: #a8b4c0;
+    }
+
+    select, button, input[type="range"] {
+      font: inherit;
+    }
+
+    select, button {
+      padding: 0.45rem 0.6rem;
+      border-radius: 8px;
+      border: 1px solid #3a4656;
+      background: #1a2230;
+      color: #e8eef4;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #243044;
+    }
+
+    button.primary {
+      background: #2a5a3a;
+      border-color: #3d7a50;
+    }
+
+    button.primary:hover {
+      background: #356a46;
+    }
+
+    .row {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+
+    .row button { flex: 1; }
+
+    .animals {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .animals button {
+      text-align: left;
+    }
+
+    .animals button.selected {
+      background: #3a5070;
+      border-color: #6a90c0;
+    }
+
+    .hint-box {
+      margin-top: 0.25rem;
+      padding: 0.65rem 0.75rem;
+      background: #141a24;
+      border: 1px solid #2a3544;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      line-height: 1.4;
+      color: #9aa8b6;
+    }
+
+    .status {
+      min-height: 1.2em;
+      font-size: 0.85rem;
+      color: #7dcea0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Animal placement tool</h1>
+  <p class="sub">
+    Drag animals where they look good — it <strong>auto-saves</strong> to
+    <code>animal-placements.json</code>.
+    <a href="index.html">Back to game</a>
+  </p>
+
+  <div class="layout">
+    <canvas id="stage" width="1000" height="600" aria-label="Room placement canvas"></canvas>
+
+    <div class="panel">
+      <label>
+        Room
+        <select id="roomSelect"></select>
+      </label>
+
+      <div class="row">
+        <button type="button" id="prevRoom">← Prev</button>
+        <button type="button" id="nextRoom">Next →</button>
+      </div>
+
+      <div>
+        <div style="font-size:0.85rem;color:#a8b4c0;margin-bottom:0.25rem;">Animal</div>
+        <div class="animals" id="animalButtons"></div>
+      </div>
+
+      <label>
+        Size: <span id="sizeLabel">160</span>
+        <input type="range" id="sizeSlider" min="60" max="280" value="160" />
+      </label>
+
+      <div class="row">
+        <button type="button" id="smallerBtn">Smaller</button>
+        <button type="button" id="biggerBtn">Bigger</button>
+      </div>
+
+      <button type="button" class="primary" id="saveBtn">Save now</button>
+      <button type="button" id="resetRoomBtn">Reset this room</button>
+
+      <p class="status" id="status"></p>
+
+      <div class="hint-box">
+        <strong>How to use</strong><br />
+        1. Run <code>python3 place_server.py</code><br />
+        2. Pick a room + animal<br />
+        3. Drag to place (auto-saves)<br />
+        4. Change size if you want<br />
+        Everything goes into one file in the project.
+      </div>
+    </div>
+  </div>
+
+  <script src="place-animals.js"></script>
+</body>
+</html>

@@ -333,6 +333,17 @@ function cameraToRoomName(camIndex) {
 }
 
 /**
+ * Only show static if the player is watching the room the animal left
+ * or the room it entered. If they are not looking, the move is silent
+ * and the animal just appears when they check that camera later.
+ */
+function playerWatchingMove(camerasOpen, currentCam, oldRoom, newRoom) {
+  if (!camerasOpen) return false;
+  const camRoom = cameraToRoomName(currentCam);
+  return camRoom === oldRoom || camRoom === newRoom;
+}
+
+/**
  * Move one room closer to the target along the shortest path.
  * Far animals need several PLAY SOUND clicks to get next door.
  */
@@ -1329,6 +1340,7 @@ async function main() {
             }
 
             if (anyoneReacted) {
+              // you are looking at this camera, so show static when something reacts
               glitchTimer = GLITCH_TIME;
               soundFlash = 0.8;
               soundIgnoredFlash = 0;
@@ -1478,7 +1490,12 @@ async function main() {
         if (!turtlePull) {
           const oldRoom = turtleRoom;
           turtleRoom = moveThreat(turtleRoom, LAND_NEIGHBORS);
-          if (turtleRoom !== oldRoom) glitchTimer = GLITCH_TIME;
+          if (
+            turtleRoom !== oldRoom &&
+            playerWatchingMove(camerasOpen, currentCam, oldRoom, turtleRoom)
+          ) {
+            glitchTimer = GLITCH_TIME;
+          }
           checkOfficeEntry("turtle", oldRoom, turtleRoom);
         }
       }
@@ -1489,7 +1506,12 @@ async function main() {
         if (!sharkPull) {
           const oldRoom = sharkRoom;
           sharkRoom = moveShark(sharkRoom, drainClosed);
-          if (sharkRoom !== oldRoom) glitchTimer = GLITCH_TIME;
+          if (
+            sharkRoom !== oldRoom &&
+            playerWatchingMove(camerasOpen, currentCam, oldRoom, sharkRoom)
+          ) {
+            glitchTimer = GLITCH_TIME;
+          }
           checkOfficeEntry("shark", oldRoom, sharkRoom);
         }
       }
@@ -1500,7 +1522,12 @@ async function main() {
         if (!crabPull) {
           const oldRoom = crabRoom;
           crabRoom = moveThreat(crabRoom, LAND_NEIGHBORS);
-          if (crabRoom !== oldRoom) glitchTimer = GLITCH_TIME;
+          if (
+            crabRoom !== oldRoom &&
+            playerWatchingMove(camerasOpen, currentCam, oldRoom, crabRoom)
+          ) {
+            glitchTimer = GLITCH_TIME;
+          }
           checkOfficeEntry("crab", oldRoom, crabRoom);
         }
       }
@@ -1511,7 +1538,12 @@ async function main() {
         if (!octoPull) {
           const oldRoom = octoRoom;
           octoRoom = moveOctopus(octoRoom, drainClosed);
-          if (octoRoom !== oldRoom) glitchTimer = GLITCH_TIME;
+          if (
+            octoRoom !== oldRoom &&
+            playerWatchingMove(camerasOpen, currentCam, oldRoom, octoRoom)
+          ) {
+            glitchTimer = GLITCH_TIME;
+          }
           checkOfficeEntry("octopus", oldRoom, octoRoom);
         }
       }
@@ -1522,7 +1554,12 @@ async function main() {
         if (!rayPull) {
           const oldRoom = rayRoom;
           rayRoom = moveShark(rayRoom, drainClosed);
-          if (rayRoom !== oldRoom) glitchTimer = GLITCH_TIME;
+          if (
+            rayRoom !== oldRoom &&
+            playerWatchingMove(camerasOpen, currentCam, oldRoom, rayRoom)
+          ) {
+            glitchTimer = GLITCH_TIME;
+          }
           checkOfficeEntry("ray", oldRoom, rayRoom);
         }
       }
