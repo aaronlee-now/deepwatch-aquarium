@@ -7,7 +7,7 @@ const SCREEN_WIDTH = 1000;
 const SCREEN_HEIGHT = 600;
 
 // bump this when you ship an update (matches game.js?v= in index.html)
-const GAME_VERSION = 28;
+const GAME_VERSION = 29;
 
 const TURTLE_MOVE_TIME = 20.0;
 const SHARK_MOVE_TIME = 20.0;
@@ -168,6 +168,54 @@ function loadImage(src) {
   });
 }
 
+/** Default camera spots if a room is not placed yet. */
+const DEFAULT_ANIMAL_SPOTS = {
+  turtle: { x: SCREEN_WIDTH / 2 - 140, y: SCREEN_HEIGHT / 2, size: 160, dark: 0 },
+  shark: { x: SCREEN_WIDTH / 2 + 140, y: SCREEN_HEIGHT / 2, size: 160, dark: 0 },
+  crab: { x: SCREEN_WIDTH / 2, y: SCREEN_HEIGHT / 2 + 70, size: 150, dark: 0 },
+  octopus: { x: SCREEN_WIDTH / 2, y: SCREEN_HEIGHT / 2 - 90, size: 150, dark: 0 },
+  ray: { x: SCREEN_WIDTH / 2 + 20, y: SCREEN_HEIGHT / 2 + 50, size: 140, dark: 0 },
+};
+
+/** Filled from animal-placements.json (partial rooms are OK). */
+let animalPlacements = { rooms: {} };
+
+function getAnimalSpot(roomName, animalId) {
+  const fallback = DEFAULT_ANIMAL_SPOTS[animalId];
+  const saved =
+    roomName &&
+    animalPlacements.rooms &&
+    animalPlacements.rooms[roomName] &&
+    animalPlacements.rooms[roomName][animalId];
+  if (!saved) {
+    return {
+      x: fallback.x,
+      y: fallback.y,
+      size: fallback.size,
+      dark: fallback.dark,
+    };
+  }
+  return {
+    x: Number(saved.x),
+    y: Number(saved.y),
+    size: Number(saved.size) || fallback.size,
+    dark: Number(saved.dark) || 0,
+  };
+}
+
+async function loadAnimalPlacements() {
+  try {
+    const res = await fetch("animal-placements.json?v=" + GAME_VERSION, {
+      cache: "no-store",
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && data.rooms) animalPlacements = data;
+  } catch (_err) {
+    // missing file is fine — use defaults
+  }
+}
+
 /** Draw an image scaled to size. Slight night tint only. */
 function drawDarkImage(targetCtx, image, x, y, width, height) {
   targetCtx.drawImage(image, x, y, width, height);
@@ -175,9 +223,15 @@ function drawDarkImage(targetCtx, image, x, y, width, height) {
   targetCtx.fillRect(x, y, width, height);
 }
 
-/** Draw a threat sprite centered on x,y. */
-function drawThreatSprite(targetCtx, image, centerX, centerY, width) {
+/** Draw a threat sprite centered on x,y. Optional dark 0–300. */
+function drawThreatSprite(targetCtx, image, centerX, centerY, width, dark) {
   const height = width * (image.height / image.width);
+  targetCtx.save();
+  const amount = Number(dark) || 0;
+  if (amount > 0) {
+    const brightness = 1 - Math.min(0.92, amount / 300);
+    targetCtx.filter = `brightness(${brightness})`;
+  }
   targetCtx.drawImage(
     image,
     centerX - width / 2,
@@ -185,11 +239,12 @@ function drawThreatSprite(targetCtx, image, centerX, centerY, width) {
     width,
     height
   );
+  targetCtx.restore();
 }
 
 /** Draw the scary shark sprite centered on x,y. */
-function drawSharkSprite(targetCtx, image, centerX, centerY, width) {
-  drawThreatSprite(targetCtx, image, centerX, centerY, width);
+function drawSharkSprite(targetCtx, image, centerX, centerY, width, dark) {
+  drawThreatSprite(targetCtx, image, centerX, centerY, width, dark);
 }
 
 function makeButton(text, x, y, width, height) {
@@ -1120,6 +1175,7 @@ async function main() {
   for (const [, filename] of CAMERAS) {
     cameraImages.push(await loadImage("images/" + filename));
   }
+  await loadAnimalPlacements();
   const newspaperPage = makeNewspaperPage();
   const urlRoom = new URLSearchParams(window.location.search).get("room");
 
@@ -1756,111 +1812,126 @@ async function main() {
         const camRoom = cameraToRoomName(currentCam);
         // Turtle on this camera (or slowly crawling in / out)
         if (turtlePull && (turtlePull.to === camRoom || turtlePull.from === camRoom)) {
+          const spot = getAnimalSpot(camRoom, "turtle");
           const t = turtlePull.progress;
           let x;
           if (turtlePull.to === camRoom) {
-            x = lerp(80, SCREEN_WIDTH / 2 - 140, t);
+            x = lerp(80, spot.x, t);
           } else {
-            x = lerp(SCREEN_WIDTH / 2 - 140, SCREEN_WIDTH - 80, t);
+            x = lerp(spot.x, SCREEN_WIDTH - 80, t);
           }
-          drawThreatSprite(ctx, turtleThreatImage, x, SCREEN_HEIGHT / 2, 160);
+          drawThreatSprite(ctx, turtleThreatImage, x, spot.y, spot.size, spot.dark);
         } else {
           const turtleData = findRoom(turtleRoom);
           if (turtleData && turtleData[1] === currentCam) {
+            const spot = getAnimalSpot(camRoom, "turtle");
             drawThreatSprite(
               ctx,
               turtleThreatImage,
-              SCREEN_WIDTH / 2 - 140,
-              SCREEN_HEIGHT / 2,
-              160
+              spot.x,
+              spot.y,
+              spot.size,
+              spot.dark
             );
           }
         }
 
         if (sharkPull && (sharkPull.to === camRoom || sharkPull.from === camRoom)) {
+          const spot = getAnimalSpot(camRoom, "shark");
           const t = sharkPull.progress;
           let x;
           if (sharkPull.to === camRoom) {
-            x = lerp(SCREEN_WIDTH - 80, SCREEN_WIDTH / 2 + 140, t);
+            x = lerp(SCREEN_WIDTH - 80, spot.x, t);
           } else {
-            x = lerp(SCREEN_WIDTH / 2 + 140, 80, t);
+            x = lerp(spot.x, 80, t);
           }
-          drawSharkSprite(ctx, sharkThreatImage, x, SCREEN_HEIGHT / 2, 160);
+          drawSharkSprite(ctx, sharkThreatImage, x, spot.y, spot.size, spot.dark);
         } else {
           const sharkData = findRoom(sharkRoom);
           if (sharkData && sharkData[1] === currentCam) {
+            const spot = getAnimalSpot(camRoom, "shark");
             drawSharkSprite(
               ctx,
               sharkThreatImage,
-              SCREEN_WIDTH / 2 + 140,
-              SCREEN_HEIGHT / 2,
-              160
+              spot.x,
+              spot.y,
+              spot.size,
+              spot.dark
             );
           }
         }
 
         if (crabPull && (crabPull.to === camRoom || crabPull.from === camRoom)) {
+          const spot = getAnimalSpot(camRoom, "crab");
           const t = crabPull.progress;
           let y;
           if (crabPull.to === camRoom) {
-            y = lerp(SCREEN_HEIGHT - 60, SCREEN_HEIGHT / 2 + 70, t);
+            y = lerp(SCREEN_HEIGHT - 60, spot.y, t);
           } else {
-            y = lerp(SCREEN_HEIGHT / 2 + 70, SCREEN_HEIGHT - 40, t);
+            y = lerp(spot.y, SCREEN_HEIGHT - 40, t);
           }
-          drawThreatSprite(ctx, crabThreatImage, SCREEN_WIDTH / 2, y, 150);
+          drawThreatSprite(ctx, crabThreatImage, spot.x, y, spot.size, spot.dark);
         } else {
           const crabData = findRoom(crabRoom);
           if (crabData && crabData[1] === currentCam) {
+            const spot = getAnimalSpot(camRoom, "crab");
             drawThreatSprite(
               ctx,
               crabThreatImage,
-              SCREEN_WIDTH / 2,
-              SCREEN_HEIGHT / 2 + 70,
-              150
+              spot.x,
+              spot.y,
+              spot.size,
+              spot.dark
             );
           }
         }
 
         if (octoPull && (octoPull.to === camRoom || octoPull.from === camRoom)) {
+          const spot = getAnimalSpot(camRoom, "octopus");
           const t = octoPull.progress;
           let y;
           if (octoPull.to === camRoom) {
-            y = lerp(60, SCREEN_HEIGHT / 2 - 90, t);
+            y = lerp(60, spot.y, t);
           } else {
-            y = lerp(SCREEN_HEIGHT / 2 - 90, 40, t);
+            y = lerp(spot.y, 40, t);
           }
-          drawThreatSprite(ctx, octopusThreatImage, SCREEN_WIDTH / 2, y, 150);
+          drawThreatSprite(ctx, octopusThreatImage, spot.x, y, spot.size, spot.dark);
         } else {
           const octoData = findRoom(octoRoom);
           if (octoData && octoData[1] === currentCam) {
+            const spot = getAnimalSpot(camRoom, "octopus");
             drawThreatSprite(
               ctx,
               octopusThreatImage,
-              SCREEN_WIDTH / 2,
-              SCREEN_HEIGHT / 2 - 90,
-              150
+              spot.x,
+              spot.y,
+              spot.size,
+              spot.dark
             );
           }
         }
 
         if (rayPull && (rayPull.to === camRoom || rayPull.from === camRoom)) {
+          const spot = getAnimalSpot(camRoom, "ray");
           const t = rayPull.progress;
           let x;
           if (rayPull.to === camRoom) {
-            x = lerp(SCREEN_WIDTH - 100, SCREEN_WIDTH / 2 + 20, t);
+            x = lerp(SCREEN_WIDTH - 100, spot.x, t);
           } else {
-            x = lerp(SCREEN_WIDTH / 2 + 20, 100, t);
+            x = lerp(spot.x, 100, t);
           }
-          drawThreatSprite(ctx, rayThreatImage, x, SCREEN_HEIGHT / 2 + 50, 140);
+          drawThreatSprite(ctx, rayThreatImage, x, spot.y, spot.size, spot.dark);
         } else {
           const rayData = findRoom(rayRoom);
           if (rayData && rayData[1] === currentCam) {
+            const spot = getAnimalSpot(camRoom, "ray");
             drawThreatSprite(
               ctx,
               rayThreatImage,
-              SCREEN_WIDTH / 2 + 20,
-              SCREEN_HEIGHT / 2 + 50,
-              140
+              spot.x,
+              spot.y,
+              spot.size,
+              spot.dark
             );
           }
         }

@@ -64,6 +64,19 @@
       color: #a8b4c0;
     }
 
+    label.check {
+      flex-direction: row;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      color: #c8d0d8;
+    }
+
+    label.check input {
+      width: 1rem;
+      height: 1rem;
+    }
+
     select, button, input[type="range"] {
       font: inherit;
     }
@@ -91,6 +104,16 @@
 
     button.primary:hover {
       background: #356a46;
+    }
+
+    button.toggle.on {
+      background: #3a5070;
+      border-color: #6a90c0;
+    }
+
+    button.toggle:not(.on) {
+      background: #1a2230;
+      opacity: 0.85;
     }
 
     .row {
@@ -137,7 +160,8 @@
 <body>
   <h1>Animal placement tool</h1>
   <p class="sub">
-    Drag animals where they look good — it <strong>auto-saves</strong> to
+    Local editor only (not linked from the public game).
+    Drag animals — it <strong>auto-saves</strong> to
     <code>animal-placements.json</code>.
     <a href="index.html">Back to game</a>
   </p>
@@ -155,6 +179,11 @@
         <button type="button" id="prevRoom">← Prev</button>
         <button type="button" id="nextRoom">Next →</button>
       </div>
+
+      <label>
+        Animal dark: <span id="darkerLabel">0</span>
+        <input type="range" id="darkerSlider" min="0" max="300" value="0" />
+      </label>
 
       <div>
         <div style="font-size:0.85rem;color:#a8b4c0;margin-bottom:0.25rem;">Animal</div>
@@ -187,6 +216,6 @@
     </div>
   </div>
 
-  <script src="place-animals.js"></script>
+  <script src="place-animals.js?v=4"></script>
 </body>
 </html>

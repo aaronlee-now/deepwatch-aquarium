@@ -5,434 +5,514 @@
   "rooms": {
     "Lobby": {
       "turtle": {
-        "x": 360,
-        "y": 300,
-        "size": 160
+        "x": 815,
+        "y": 415,
+        "size": 160,
+        "dark": 200
       },
       "shark": {
-        "x": 640,
-        "y": 300,
-        "size": 160
+        "x": 498,
+        "y": 397,
+        "size": 109,
+        "dark": 171
       },
       "crab": {
-        "x": 500,
-        "y": 370,
-        "size": 150
+        "x": 371,
+        "y": 239,
+        "size": 100,
+        "dark": 200
       },
       "octopus": {
-        "x": 500,
-        "y": 210,
-        "size": 150
+        "x": 106,
+        "y": 342,
+        "size": 150,
+        "dark": 258
       },
       "ray": {
-        "x": 520,
-        "y": 350,
-        "size": 140
+        "x": 123,
+        "y": 487,
+        "size": 140,
+        "dark": 118
       }
     },
     "Gift": {
       "turtle": {
-        "x": 360,
-        "y": 300,
-        "size": 160
+        "x": 726,
+        "y": 506,
+        "size": 106,
+        "dark": 160
       },
       "shark": {
-        "x": 640,
-        "y": 300,
-        "size": 160
+        "x": 222,
+        "y": 552,
+        "size": 125,
+        "dark": 158
       },
       "crab": {
-        "x": 500,
-        "y": 370,
-        "size": 150
+        "x": 272,
+        "y": 409,
+        "size": 60,
+        "dark": 116
       },
       "octopus": {
-        "x": 500,
-        "y": 210,
-        "size": 150
+        "x": 46,
+        "y": 139,
+        "size": 65,
+        "dark": 213
       },
       "ray": {
-        "x": 520,
-        "y": 350,
-        "size": 140
+        "x": 369,
+        "y": 198,
+        "size": 123,
+        "dark": 117
       }
     },
     "Reef": {
       "turtle": {
-        "x": 360,
-        "y": 300,
-        "size": 160
+        "x": 759,
+        "y": 326,
+        "size": 80,
+        "dark": 186
       },
       "shark": {
-        "x": 640,
-        "y": 300,
-        "size": 160
+        "x": 86,
+        "y": 232,
+        "size": 92,
+        "dark": 69
       },
       "crab": {
-        "x": 500,
-        "y": 370,
-        "size": 150
+        "x": 188,
+        "y": 338,
+        "size": 60,
+        "dark": 178
       },
       "octopus": {
-        "x": 500,
-        "y": 210,
-        "size": 150
+        "x": 888,
+        "y": 447,
+        "size": 60,
+        "dark": 133
       },
       "ray": {
-        "x": 520,
-        "y": 350,
-        "size": 140
+        "x": 391,
+        "y": 227,
+        "size": 107,
+        "dark": 110
       }
     },
     "Shark": {
       "turtle": {
         "x": 360,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "shark": {
         "x": 640,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "crab": {
         "x": 500,
         "y": 370,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "octopus": {
         "x": 500,
         "y": 210,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "ray": {
         "x": 520,
         "y": 350,
-        "size": 140
+        "size": 140,
+        "dark": 0
       }
     },
     "Jelly": {
       "turtle": {
         "x": 360,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "shark": {
         "x": 640,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "crab": {
         "x": 500,
         "y": 370,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "octopus": {
         "x": 500,
         "y": 210,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "ray": {
         "x": 520,
         "y": 350,
-        "size": 140
+        "size": 140,
+        "dark": 0
       }
     },
     "Tide": {
       "turtle": {
         "x": 360,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "shark": {
         "x": 640,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "crab": {
         "x": 500,
         "y": 370,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "octopus": {
         "x": 500,
         "y": 210,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "ray": {
         "x": 520,
         "y": 350,
-        "size": 140
+        "size": 140,
+        "dark": 0
       }
     },
     "Hall": {
       "turtle": {
         "x": 360,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "shark": {
         "x": 640,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "crab": {
         "x": 500,
         "y": 370,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "octopus": {
         "x": 500,
         "y": 210,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "ray": {
         "x": 520,
         "y": 350,
-        "size": 140
+        "size": 140,
+        "dark": 0
       }
     },
     "Controls": {
       "turtle": {
         "x": 360,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "shark": {
         "x": 640,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "crab": {
         "x": 500,
         "y": 370,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "octopus": {
         "x": 500,
         "y": 210,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "ray": {
         "x": 520,
         "y": 350,
-        "size": 140
+        "size": 140,
+        "dark": 0
       }
     },
     "Drain": {
       "turtle": {
         "x": 360,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "shark": {
         "x": 640,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "crab": {
         "x": 500,
         "y": 370,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "octopus": {
         "x": 500,
         "y": 210,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "ray": {
         "x": 520,
         "y": 350,
-        "size": 140
+        "size": 140,
+        "dark": 0
       }
     },
     "Filter": {
       "turtle": {
         "x": 360,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "shark": {
         "x": 640,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "crab": {
         "x": 500,
         "y": 370,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "octopus": {
         "x": 500,
         "y": 210,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "ray": {
         "x": 520,
         "y": 350,
-        "size": 140
+        "size": 140,
+        "dark": 0
       }
     },
     "Penguin": {
       "turtle": {
         "x": 360,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "shark": {
         "x": 640,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "crab": {
         "x": 500,
         "y": 370,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "octopus": {
         "x": 500,
         "y": 210,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "ray": {
         "x": 520,
         "y": 350,
-        "size": 140
+        "size": 140,
+        "dark": 0
       }
     },
     "Kelp": {
       "turtle": {
         "x": 360,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "shark": {
         "x": 640,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "crab": {
         "x": 500,
         "y": 370,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "octopus": {
         "x": 500,
         "y": 210,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "ray": {
         "x": 520,
         "y": 350,
-        "size": 140
+        "size": 140,
+        "dark": 0
       }
     },
     "Ray": {
       "turtle": {
         "x": 360,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "shark": {
         "x": 640,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "crab": {
         "x": 500,
         "y": 370,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "octopus": {
         "x": 500,
         "y": 210,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "ray": {
         "x": 520,
         "y": 350,
-        "size": 140
+        "size": 140,
+        "dark": 0
       }
     },
     "Cafe": {
       "turtle": {
         "x": 360,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "shark": {
         "x": 640,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "crab": {
         "x": 500,
         "y": 370,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "octopus": {
         "x": 500,
         "y": 210,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "ray": {
         "x": 520,
         "y": 350,
-        "size": 140
+        "size": 140,
+        "dark": 0
       }
     },
     "Storage": {
       "turtle": {
         "x": 360,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "shark": {
         "x": 640,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "crab": {
         "x": 500,
         "y": 370,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "octopus": {
         "x": 500,
         "y": 210,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "ray": {
         "x": 520,
         "y": 350,
-        "size": 140
+        "size": 140,
+        "dark": 0
       }
     },
     "Deep": {
       "turtle": {
         "x": 360,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "shark": {
         "x": 640,
         "y": 300,
-        "size": 160
+        "size": 160,
+        "dark": 0
       },
       "crab": {
         "x": 500,
         "y": 370,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "octopus": {
         "x": 500,
         "y": 210,
-        "size": 150
+        "size": 150,
+        "dark": 0
       },
       "ray": {
         "x": 520,
         "y": 350,
-        "size": 140
+        "size": 140,
+        "dark": 0
       }
     }
   }

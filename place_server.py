@@ -32,30 +32,34 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path.startswith("/api/"):
             print(format % args)
 
-    def do_OPTIONS(self):
-        self.send_response(204)
-        self.end_headers()
-
     def end_headers(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        # local tool only — do not allow other websites to call this server
         if "animal-placements.json" in self.path:
             self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
     def do_POST(self):
+        # only this computer can save (not the public internet)
+        if self.client_address[0] not in ("127.0.0.1", "::1"):
+            self.send_error(403, "Local saves only")
+            return
+
         if self.path.rstrip("/") != "/api/save-placements":
             self.send_error(404, "Unknown save path")
             return
 
         length = int(self.headers.get("Content-Length", "0"))
+        if length <= 0 or length > 2_000_000:
+            self.send_error(400, "Bad save size")
+            return
         raw = self.rfile.read(length)
 
         try:
             data = json.loads(raw.decode("utf-8"))
             if not isinstance(data, dict) or "rooms" not in data:
                 raise ValueError("JSON must include a rooms section")
+            if not isinstance(data["rooms"], dict):
+                raise ValueError("rooms must be an object")
             SAVE_FILE.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
         except Exception as err:
             msg = str(err).encode("utf-8")

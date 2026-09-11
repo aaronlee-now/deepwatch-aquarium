@@ -41,6 +41,8 @@ const roomSelect = document.getElementById("roomSelect");
 const animalButtons = document.getElementById("animalButtons");
 const sizeSlider = document.getElementById("sizeSlider");
 const sizeLabel = document.getElementById("sizeLabel");
+const darkerSlider = document.getElementById("darkerSlider");
+const darkerLabel = document.getElementById("darkerLabel");
 const statusEl = document.getElementById("status");
 
 let roomIndex = 0;
@@ -60,7 +62,7 @@ function makeDefaultPlacements() {
   for (const [roomName] of ROOMS) {
     data[roomName] = {};
     for (const [id, , , x, y, size] of ANIMALS) {
-      data[roomName][id] = { x, y, size };
+      data[roomName][id] = { x, y, size, dark: 0 };
     }
   }
   return data;
@@ -87,16 +89,21 @@ function loadImage(src) {
   });
 }
 
-function drawThreat(image, centerX, centerY, width) {
+function drawThreat(image, centerX, centerY, width, dark) {
   if (!image) return;
   const height = width * (image.height / image.width);
-  ctx.drawImage(
-    image,
-    centerX - width / 2,
-    centerY - height / 2,
-    width,
-    height
-  );
+  const x = centerX - width / 2;
+  const y = centerY - height / 2;
+
+  // darken only the animal picture (keeps clear edges)
+  const amount = Number(dark) || 0;
+  ctx.save();
+  if (amount > 0) {
+    const brightness = 1 - Math.min(0.92, amount / 300);
+    ctx.filter = `brightness(${brightness})`;
+  }
+  ctx.drawImage(image, x, y, width, height);
+  ctx.restore();
 }
 
 function hitTest(animalId, mx, my) {
@@ -131,9 +138,6 @@ function draw() {
 
   if (roomImg) {
     ctx.drawImage(roomImg, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-    // slight night look, like the game
-    ctx.fillStyle = "rgba(0, 0, 40, 0.28)";
-    ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
   }
 
   // draw animals (selected on top)
@@ -145,7 +149,7 @@ function draw() {
     const image = animalImages[id];
     if (!image) continue;
 
-    drawThreat(image, spot.x, spot.y, spot.size);
+    drawThreat(image, spot.x, spot.y, spot.size, spot.dark);
 
     if (id === selectedAnimal) {
       const height = spot.size * (image.height / image.width);
@@ -171,6 +175,8 @@ function refreshSizeUi() {
   const spot = getSpot(selectedAnimal);
   sizeSlider.value = String(spot.size);
   sizeLabel.textContent = String(spot.size);
+  darkerSlider.value = String(spot.dark || 0);
+  darkerLabel.textContent = String(spot.dark || 0);
 }
 
 function selectAnimal(id) {
@@ -260,6 +266,7 @@ function applyLoadedData(data) {
         x: Number(spot.x),
         y: Number(spot.y),
         size: Number(spot.size),
+        dark: Number(spot.dark) || 0,
       };
     }
   }
@@ -397,6 +404,14 @@ async function main() {
     refreshSizeUi();
     draw();
     scheduleSave("size");
+  });
+
+  darkerSlider.addEventListener("input", () => {
+    const spot = getSpot(selectedAnimal);
+    spot.dark = Number(darkerSlider.value);
+    darkerLabel.textContent = String(spot.dark);
+    draw();
+    scheduleSave("dark");
   });
 
   document.getElementById("saveBtn").addEventListener("click", async () => {
