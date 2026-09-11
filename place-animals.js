@@ -227,6 +227,12 @@ function buildSaveObject() {
 
 async function saveToProjectFile() {
   const body = JSON.stringify(buildSaveObject(), null, 2);
+  // backup in the browser too, so work is harder to lose
+  try {
+    localStorage.setItem("deepwatch-animal-placements", body);
+  } catch (_err) {
+    // private mode / full storage — ignore
+  }
   const res = await fetch("/api/save-placements", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -238,6 +244,17 @@ async function saveToProjectFile() {
   }
 }
 
+function downloadBackupJson() {
+  const text = JSON.stringify(buildSaveObject(), null, 2);
+  const blob = new Blob([text], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "animal-placements.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function scheduleSave(reason) {
   if (!saveReady) return;
   if (saveTimer) clearTimeout(saveTimer);
@@ -247,7 +264,15 @@ function scheduleSave(reason) {
       await saveToProjectFile();
       setStatus("Saved to animal-placements.json" + (reason ? " (" + reason + ")" : ""));
     } catch (_err) {
-      setStatus("Could not auto-save. Run: python3 place_server.py");
+      try {
+        localStorage.setItem(
+          "deepwatch-animal-placements",
+          JSON.stringify(buildSaveObject(), null, 2)
+        );
+      } catch (_e2) {
+        // ignore
+      }
+      setStatus("Not saved to project. Use http://127.0.0.1:8765 and run place_server.py");
     }
   }, 250);
 }
@@ -278,12 +303,23 @@ function applyLoadedData(data) {
 async function tryLoadSavedFile() {
   try {
     const res = await fetch("animal-placements.json", { cache: "no-store" });
-    if (!res.ok) return;
-    const data = await res.json();
-    applyLoadedData(data);
-    setStatus("Loaded animal-placements.json");
+    if (res.ok) {
+      const data = await res.json();
+      applyLoadedData(data);
+      setStatus("Loaded animal-placements.json");
+      return;
+    }
   } catch (_err) {
-    // no saved file yet — that's fine
+    // try browser backup next
+  }
+
+  try {
+    const raw = localStorage.getItem("deepwatch-animal-placements");
+    if (!raw) return;
+    applyLoadedData(JSON.parse(raw));
+    setStatus("Loaded browser backup (click Save now to write the project file)");
+  } catch (_err) {
+    // no backup
   }
 }
 
@@ -419,7 +455,8 @@ async function main() {
       await saveToProjectFile();
       setStatus("Saved to animal-placements.json");
     } catch (_err) {
-      setStatus("Could not save. Run: python3 place_server.py");
+      downloadBackupJson();
+      setStatus("Downloaded backup. For project save use http://127.0.0.1:8765");
     }
   });
 
