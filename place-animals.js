@@ -225,14 +225,53 @@ function buildSaveObject() {
   };
 }
 
-async function saveToProjectFile() {
-  const body = JSON.stringify(buildSaveObject(), null, 2);
-  // backup in the browser too, so work is harder to lose
+const CAN_SAVE_TO_PROJECT =
+  location.hostname === "127.0.0.1" || location.hostname === "localhost";
+
+function countCustomRooms(data) {
+  if (!data || !data.rooms) return 0;
+  const defaults = {
+    turtle: [360, 300, 160],
+    shark: [640, 300, 160],
+    crab: [500, 370, 150],
+    octopus: [500, 210, 150],
+    ray: [520, 350, 140],
+  };
+  let count = 0;
+  for (const animals of Object.values(data.rooms)) {
+    let changed = false;
+    for (const [id, spot] of Object.entries(animals)) {
+      const d = defaults[id];
+      if (!d) continue;
+      if (
+        Number(spot.x) !== d[0] ||
+        Number(spot.y) !== d[1] ||
+        Number(spot.size) !== d[2] ||
+        Number(spot.dark || 0) !== 0
+      ) {
+        changed = true;
+        break;
+      }
+    }
+    if (changed) count += 1;
+  }
+  return count;
+}
+
+function rememberInBrowser() {
   try {
-    localStorage.setItem("deepwatch-animal-placements", body);
+    localStorage.setItem(
+      "deepwatch-animal-placements",
+      JSON.stringify(buildSaveObject(), null, 2)
+    );
   } catch (_err) {
     // private mode / full storage — ignore
   }
+}
+
+async function saveToProjectFile() {
+  const body = JSON.stringify(buildSaveObject(), null, 2);
+  rememberInBrowser();
   const res = await fetch("/api/save-placements", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -245,6 +284,7 @@ async function saveToProjectFile() {
 }
 
 function downloadBackupJson() {
+  rememberInBrowser();
   const text = JSON.stringify(buildSaveObject(), null, 2);
   const blob = new Blob([text], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -260,19 +300,22 @@ function scheduleSave(reason) {
   if (saveTimer) clearTimeout(saveTimer);
   setStatus("Saving…");
   saveTimer = setTimeout(async () => {
+    rememberInBrowser();
+    if (!CAN_SAVE_TO_PROJECT) {
+      setStatus(
+        "Saved in this browser. Click Save / Download so I can upload it."
+      );
+      return;
+    }
     try {
       await saveToProjectFile();
-      setStatus("Saved to animal-placements.json" + (reason ? " (" + reason + ")" : ""));
+      setStatus(
+        "Saved to animal-placements.json" + (reason ? " (" + reason + ")" : "")
+      );
     } catch (_err) {
-      try {
-        localStorage.setItem(
-          "deepwatch-animal-placements",
-          JSON.stringify(buildSaveObject(), null, 2)
-        );
-      } catch (_e2) {
-        // ignore
-      }
-      setStatus("Not saved to project. Use http://127.0.0.1:8765 and run place_server.py");
+      setStatus(
+        "Saved in browser only. Click Save / Download, or use http://127.0.0.1:8765"
+      );
     }
   }, 250);
 }
@@ -301,25 +344,48 @@ function applyLoadedData(data) {
 }
 
 async function tryLoadSavedFile() {
+  let fileData = null;
+  let backupData = null;
+
   try {
     const res = await fetch("animal-placements.json", { cache: "no-store" });
-    if (res.ok) {
-      const data = await res.json();
-      applyLoadedData(data);
-      setStatus("Loaded animal-placements.json");
-      return;
-    }
+    if (res.ok) fileData = await res.json();
   } catch (_err) {
-    // try browser backup next
+    // ignore
   }
 
   try {
     const raw = localStorage.getItem("deepwatch-animal-placements");
-    if (!raw) return;
-    applyLoadedData(JSON.parse(raw));
-    setStatus("Loaded browser backup (click Save now to write the project file)");
+    if (raw) backupData = JSON.parse(raw);
   } catch (_err) {
-    // no backup
+    // ignore
+  }
+
+  const fileScore = countCustomRooms(fileData);
+  const backupScore = countCustomRooms(backupData);
+
+  // Prefer whichever has more of your placed rooms
+  if (backupScore > fileScore) {
+    applyLoadedData(backupData);
+    setStatus(
+      "Loaded your browser placements (" +
+        backupScore +
+        " rooms). Click Save / Download to upload."
+    );
+    return;
+  }
+
+  if (fileData) {
+    applyLoadedData(fileData);
+    setStatus(
+      "Loaded animal-placements.json (" + fileScore + " custom rooms)"
+    );
+    return;
+  }
+
+  if (backupData) {
+    applyLoadedData(backupData);
+    setStatus("Loaded browser backup. Click Save / Download.");
   }
 }
 
@@ -451,13 +517,18 @@ async function main() {
   });
 
   document.getElementById("saveBtn").addEventListener("click", async () => {
-    try {
-      await saveToProjectFile();
-      setStatus("Saved to animal-placements.json");
-    } catch (_err) {
-      downloadBackupJson();
-      setStatus("Downloaded backup. For project save use http://127.0.0.1:8765");
+    rememberInBrowser();
+    if (CAN_SAVE_TO_PROJECT) {
+      try {
+        await saveToProjectFile();
+        setStatus("Saved to animal-placements.json");
+        return;
+      } catch (_err) {
+        // fall through to download
+      }
     }
+    downloadBackupJson();
+    setStatus("Downloaded animal-placements.json — tell Cursor to upload it");
   });
 
   document.getElementById("resetRoomBtn").addEventListener("click", () => {

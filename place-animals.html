@@ -160,9 +160,8 @@
 <body>
   <h1>Animal placement tool</h1>
   <p class="sub">
-    Local editor only (not linked from the public game).
-    Drag animals — it <strong>auto-saves</strong> to
-    <code>animal-placements.json</code>.
+    Drag animals onto each room.
+    On the website, click <strong>Save / Download</strong> when you finish.
     <a href="index.html">Back to game</a>
   </p>
 
@@ -200,22 +199,21 @@
         <button type="button" id="biggerBtn">Bigger</button>
       </div>
 
-      <button type="button" class="primary" id="saveBtn">Save now</button>
+      <button type="button" class="primary" id="saveBtn">Save / Download</button>
       <button type="button" id="resetRoomBtn">Reset this room</button>
 
       <p class="status" id="status"></p>
 
       <div class="hint-box">
         <strong>How to use</strong><br />
-        1. Run <code>python3 place_server.py</code><br />
-        2. Pick a room + animal<br />
-        3. Drag to place (auto-saves)<br />
-        4. Change size if you want<br />
-        Everything goes into one file in the project.
+        1. Pick a room + animal<br />
+        2. Drag to place<br />
+        3. When done, click <strong>Save / Download</strong><br />
+        4. Tell Cursor “upload now” so it goes on GitHub
       </div>
     </div>
   </div>
 
-  <script src="place-animals.js?v=5"></script>
+  <script src="place-animals.js?v=6"></script>
 </body>
 </html>
