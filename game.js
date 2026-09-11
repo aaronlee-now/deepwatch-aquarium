@@ -7,7 +7,7 @@ const SCREEN_WIDTH = 1000;
 const SCREEN_HEIGHT = 600;
 
 // bump this when you ship an update (matches game.js?v= in index.html)
-const GAME_VERSION = 29;
+const GAME_VERSION = 30;
 
 const TURTLE_MOVE_TIME = 20.0;
 const SHARK_MOVE_TIME = 20.0;
@@ -431,48 +431,23 @@ function nextRoomToward(fromRoom, targetRoom, neighbors, blockedRooms) {
   return step;
 }
 
-function roomsAreNeighbors(a, b, neighbors) {
-  return (neighbors[a] || []).includes(b);
-}
-
 /**
  * Try to lure one threat toward the camera room.
- * Far: one room hop. Next door: start / boost a slow crawl.
+ * Each successful sound moves them one room closer (instant appear, no slide).
  * Returns { room, pull, reacted }.
  */
 function tryLureThreat(room, pull, target, neighbors, blockedRooms) {
   const blocked = blockedRooms || [];
   if (blocked.includes(target) && room !== target) {
-    return { room, pull, reacted: false };
+    return { room, pull: null, reacted: false };
   }
 
-  // already crawling into this camera — extra sound pulls harder
-  if (pull && pull.to === target && pull.from === room) {
-    return {
-      room,
-      pull: {
-        from: pull.from,
-        to: pull.to,
-        progress: Math.min(1, pull.progress + SOUND_PULL_BOOST),
-      },
-      reacted: true,
-    };
+  // already there
+  if (room === target) {
+    return { room, pull: null, reacted: false };
   }
 
-  // next door: begin a slow drag into the room
-  if (roomsAreNeighbors(room, target, neighbors) && !blocked.includes(target)) {
-    return {
-      room,
-      pull: {
-        from: room,
-        to: target,
-        progress: SOUND_PULL_BOOST * 0.4,
-      },
-      reacted: true,
-    };
-  }
-
-  // farther away: walk one room closer first
+  // one room closer (or into the room if next door) — pops in, no crawl
   const next = nextRoomToward(room, target, neighbors, blocked);
   if (next !== room) {
     return { room: next, pull: null, reacted: true };
@@ -968,10 +943,8 @@ function drawMap(
   currentCam,
   sharkRoom,
   showDrains,
-  sharkPull,
   sharkImage,
   rayRoom,
-  rayPull,
   rayImage,
 ) {
   ctx.save();
@@ -1008,24 +981,10 @@ function drawMap(
     ctx.stroke();
   }
 
+  // Map dots just sit in the room (no sliding between rooms)
   const shark = findRoom(sharkRoom);
   if (shark) {
-    let cx;
-    let cy;
-    if (sharkPull) {
-      const fromRoom = findRoom(sharkPull.from);
-      const toRoom = findRoom(sharkPull.to);
-      if (fromRoom && toRoom) {
-        const [fx, fy] = roomCenter(fromRoom);
-        const [tx, ty] = roomCenter(toRoom);
-        cx = lerp(fx, tx, sharkPull.progress);
-        cy = lerp(fy, ty, sharkPull.progress);
-      } else {
-        [cx, cy] = roomCenter(shark);
-      }
-    } else {
-      [cx, cy] = roomCenter(shark);
-    }
+    const [cx, cy] = roomCenter(shark);
     if (sharkImage) {
       drawSharkSprite(ctx, sharkImage, cx, cy, 28);
     } else {
@@ -1038,22 +997,7 @@ function drawMap(
 
   const ray = findRoom(rayRoom);
   if (ray) {
-    let cx;
-    let cy;
-    if (rayPull) {
-      const fromRoom = findRoom(rayPull.from);
-      const toRoom = findRoom(rayPull.to);
-      if (fromRoom && toRoom) {
-        const [fx, fy] = roomCenter(fromRoom);
-        const [tx, ty] = roomCenter(toRoom);
-        cx = lerp(fx, tx, rayPull.progress);
-        cy = lerp(fy, ty, rayPull.progress);
-      } else {
-        [cx, cy] = roomCenter(ray);
-      }
-    } else {
-      [cx, cy] = roomCenter(ray);
-    }
+    const [cx, cy] = roomCenter(ray);
     if (rayImage) {
       drawThreatSprite(ctx, rayImage, cx, cy, 26);
     } else {
@@ -1810,130 +1754,70 @@ async function main() {
         drawCameraGlitch();
       } else {
         const camRoom = cameraToRoomName(currentCam);
-        // Turtle on this camera (or slowly crawling in / out)
-        if (turtlePull && (turtlePull.to === camRoom || turtlePull.from === camRoom)) {
+        // Animals just appear at their placed spot (no slide / crawl)
+        const turtleData = findRoom(turtleRoom);
+        if (turtleData && turtleData[1] === currentCam) {
           const spot = getAnimalSpot(camRoom, "turtle");
-          const t = turtlePull.progress;
-          let x;
-          if (turtlePull.to === camRoom) {
-            x = lerp(80, spot.x, t);
-          } else {
-            x = lerp(spot.x, SCREEN_WIDTH - 80, t);
-          }
-          drawThreatSprite(ctx, turtleThreatImage, x, spot.y, spot.size, spot.dark);
-        } else {
-          const turtleData = findRoom(turtleRoom);
-          if (turtleData && turtleData[1] === currentCam) {
-            const spot = getAnimalSpot(camRoom, "turtle");
-            drawThreatSprite(
-              ctx,
-              turtleThreatImage,
-              spot.x,
-              spot.y,
-              spot.size,
-              spot.dark
-            );
-          }
+          drawThreatSprite(
+            ctx,
+            turtleThreatImage,
+            spot.x,
+            spot.y,
+            spot.size,
+            spot.dark
+          );
         }
 
-        if (sharkPull && (sharkPull.to === camRoom || sharkPull.from === camRoom)) {
+        const sharkData = findRoom(sharkRoom);
+        if (sharkData && sharkData[1] === currentCam) {
           const spot = getAnimalSpot(camRoom, "shark");
-          const t = sharkPull.progress;
-          let x;
-          if (sharkPull.to === camRoom) {
-            x = lerp(SCREEN_WIDTH - 80, spot.x, t);
-          } else {
-            x = lerp(spot.x, 80, t);
-          }
-          drawSharkSprite(ctx, sharkThreatImage, x, spot.y, spot.size, spot.dark);
-        } else {
-          const sharkData = findRoom(sharkRoom);
-          if (sharkData && sharkData[1] === currentCam) {
-            const spot = getAnimalSpot(camRoom, "shark");
-            drawSharkSprite(
-              ctx,
-              sharkThreatImage,
-              spot.x,
-              spot.y,
-              spot.size,
-              spot.dark
-            );
-          }
+          drawSharkSprite(
+            ctx,
+            sharkThreatImage,
+            spot.x,
+            spot.y,
+            spot.size,
+            spot.dark
+          );
         }
 
-        if (crabPull && (crabPull.to === camRoom || crabPull.from === camRoom)) {
+        const crabData = findRoom(crabRoom);
+        if (crabData && crabData[1] === currentCam) {
           const spot = getAnimalSpot(camRoom, "crab");
-          const t = crabPull.progress;
-          let y;
-          if (crabPull.to === camRoom) {
-            y = lerp(SCREEN_HEIGHT - 60, spot.y, t);
-          } else {
-            y = lerp(spot.y, SCREEN_HEIGHT - 40, t);
-          }
-          drawThreatSprite(ctx, crabThreatImage, spot.x, y, spot.size, spot.dark);
-        } else {
-          const crabData = findRoom(crabRoom);
-          if (crabData && crabData[1] === currentCam) {
-            const spot = getAnimalSpot(camRoom, "crab");
-            drawThreatSprite(
-              ctx,
-              crabThreatImage,
-              spot.x,
-              spot.y,
-              spot.size,
-              spot.dark
-            );
-          }
+          drawThreatSprite(
+            ctx,
+            crabThreatImage,
+            spot.x,
+            spot.y,
+            spot.size,
+            spot.dark
+          );
         }
 
-        if (octoPull && (octoPull.to === camRoom || octoPull.from === camRoom)) {
+        const octoData = findRoom(octoRoom);
+        if (octoData && octoData[1] === currentCam) {
           const spot = getAnimalSpot(camRoom, "octopus");
-          const t = octoPull.progress;
-          let y;
-          if (octoPull.to === camRoom) {
-            y = lerp(60, spot.y, t);
-          } else {
-            y = lerp(spot.y, 40, t);
-          }
-          drawThreatSprite(ctx, octopusThreatImage, spot.x, y, spot.size, spot.dark);
-        } else {
-          const octoData = findRoom(octoRoom);
-          if (octoData && octoData[1] === currentCam) {
-            const spot = getAnimalSpot(camRoom, "octopus");
-            drawThreatSprite(
-              ctx,
-              octopusThreatImage,
-              spot.x,
-              spot.y,
-              spot.size,
-              spot.dark
-            );
-          }
+          drawThreatSprite(
+            ctx,
+            octopusThreatImage,
+            spot.x,
+            spot.y,
+            spot.size,
+            spot.dark
+          );
         }
 
-        if (rayPull && (rayPull.to === camRoom || rayPull.from === camRoom)) {
+        const rayData = findRoom(rayRoom);
+        if (rayData && rayData[1] === currentCam) {
           const spot = getAnimalSpot(camRoom, "ray");
-          const t = rayPull.progress;
-          let x;
-          if (rayPull.to === camRoom) {
-            x = lerp(SCREEN_WIDTH - 100, spot.x, t);
-          } else {
-            x = lerp(spot.x, 100, t);
-          }
-          drawThreatSprite(ctx, rayThreatImage, x, spot.y, spot.size, spot.dark);
-        } else {
-          const rayData = findRoom(rayRoom);
-          if (rayData && rayData[1] === currentCam) {
-            const spot = getAnimalSpot(camRoom, "ray");
-            drawThreatSprite(
-              ctx,
-              rayThreatImage,
-              spot.x,
-              spot.y,
-              spot.size,
-              spot.dark
-            );
-          }
+          drawThreatSprite(
+            ctx,
+            rayThreatImage,
+            spot.x,
+            spot.y,
+            spot.size,
+            spot.dark
+          );
         }
       }
 
@@ -1942,10 +1826,8 @@ async function main() {
         currentCam,
         sharkRoom,
         showDrainMap,
-        sharkPull,
         sharkThreatImage,
         rayRoom,
-        rayPull,
         rayThreatImage,
       );
       drawButton(mapModeButton, { selected: showDrainMap, transparent: true });
