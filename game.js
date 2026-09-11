@@ -7,7 +7,7 @@ const SCREEN_WIDTH = 1000;
 const SCREEN_HEIGHT = 600;
 
 // bump this when you ship an update (matches game.js?v= in index.html)
-const GAME_VERSION = 30;
+const GAME_VERSION = 31;
 
 const TURTLE_MOVE_TIME = 20.0;
 const SHARK_MOVE_TIME = 20.0;
